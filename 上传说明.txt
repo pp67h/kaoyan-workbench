@@ -1,0 +1,19 @@
+GitHub Pages 上传步骤:
+
+1. 打开 github.com 并登录。
+2. 新建仓库,建议名字叫: kaoyan-workbench
+3. 仓库设为 Public。
+4. 把这个文件夹里的所有文件上传到仓库根目录:
+   - index.html
+   - pangpang_pet_loop.mp4
+   - pangpang_app_icon.jpg
+   - .nojekyll
+   - README.md
+5. 进入仓库 Settings → Pages。
+6. Source 选择 Deploy from a branch。
+7. Branch 选择 main / root,点 Save。
+8. 等 1-3 分钟,GitHub 会给一个网址,通常是:
+   https://你的用户名.github.io/kaoyan-workbench/
+9. 把这个网址发给我,我就能给你打“云更新版 APK”。
+
+以后你让我改功能,我只改这个仓库里的网页文件。你手机和平板不用重新下载 App,彻底关闭再打开即可更新。
