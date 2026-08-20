@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.8.21.8-->
+<!--APP_VER:2026.8.21.9-->
 <style>
 :root{
   --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
@@ -81,7 +81,15 @@ input,textarea,select{font-family:inherit;font-size:15px}
   #app{gap:10px;padding:10px}
   .panel{padding:13px;border-radius:15px}
   .row{flex-wrap:wrap}
-  .spread{flex-wrap:wrap;gap:4px}
+  .spread>span.muted{display:none}
+  .panel h2{font-size:15.5px}
+  .panel h3,.spread h3{font-size:13px}
+  .spread b,.kc b{font-size:13px}
+}
+/* 平板竖屏 / 大手机：标题略缩，避免挤压右侧统计 */
+@media(max-width:760px){
+  .panel h2{font-size:16.5px}
+  .spread h3,.panel h3{font-size:14px}
 }
 
 /* ===== 左侧导航 ===== */
@@ -103,8 +111,11 @@ input,textarea,select{font-family:inherit;font-size:15px}
 /* ===== 卡片通用 ===== */
 .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
   padding:16px;box-shadow:var(--shadow);margin-bottom:14px}
-.panel h2{margin:0 0 4px;font-size:18px;display:flex;align-items:center;gap:8px}
-.panel h3{margin:14px 0 8px;font-size:15px;color:var(--accent,#e85d4a)}
+.panel h2{margin:0 0 4px;font-size:18px;display:flex;align-items:center;gap:8px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.panel h3{margin:14px 0 8px;font-size:15px;color:var(--accent,#e85d4a);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.panel h2 span.muted{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sub{color:var(--ink-soft);font-size:12px;margin-bottom:10px}
 .tag{display:inline-block;font-size:11px;padding:2px 9px;border-radius:20px;background:var(--paper);color:var(--ink-soft);margin:2px}
 .btn{background:var(--accent,#e85d4a);color:#fff;padding:9px 14px;border-radius:12px;font-size:14px;
@@ -115,7 +126,10 @@ input,textarea,select{font-family:inherit;font-size:15px}
 .btn.on{background:var(--c-know);color:#fff;border-color:var(--c-know)}
 .chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:12px;background:var(--paper);color:var(--ink-soft)}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.spread{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.spread{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:nowrap;overflow:hidden}
+.spread>*{min-width:0;flex-shrink:1}
+.spread>h2,.spread>h3,.spread>b,.spread h2,.spread h3,.spread b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.spread>span.muted,.spread>span.pill{white-space:nowrap}
 .muted{color:var(--ink-soft)}
 hr{border:none;border-top:1px dashed var(--line);margin:12px 0}
 input[type=text],input[type=number],textarea,select{width:100%;border:1.5px solid var(--line);
@@ -271,8 +285,9 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 
 /* ===== 政治 / 英语 进度 ===== */
 .subj-card{border:1px solid var(--line);border-radius:14px;padding:12px;margin:8px 0;background:var(--paper2)}
-.subj-card .nm{font-weight:700;display:flex;justify-content:space-between;align-items:center}
-.stepper{display:inline-flex;align-items:center;gap:8px}
+.subj-card .nm{font-weight:700;display:flex;justify-content:space-between;align-items:center;
+  flex-wrap:wrap;row-gap:6px;white-space:nowrap;column-gap:8px}
+.stepper{display:inline-flex;align-items:center;gap:8px;flex-shrink:0}
 .stepper button{width:28px;height:28px;border-radius:8px;background:var(--card);border:1.5px solid var(--line);font-size:16px;font-weight:700}
 .stepper b{min-width:30px;text-align:center}
 
@@ -1010,8 +1025,7 @@ function renderHome(main){
     <div class="quote">🌻 今日寄语：${msg}</div>
   </div>
   <div class="panel">
-    <h2>📌 当前进度总览 <span class="muted" style="font-weight:400;font-size:12px">点击每条可编辑</span></h2>
-    <div class="sub">系统已根据今天（${d}）自动判定为 <b style="color:var(--c-home)">${ph}</b></div>
+    <h2>📌 当前进度总览</h2>
     <div class="row">
       ${progressPlans().map((p,i)=>`<div class="chip" style="cursor:pointer" onclick="editPlan(${i})" title="点击编辑">${p} ✎</div>`).join('')}
     </div>
@@ -1089,7 +1103,7 @@ function renderCal(main){
     <h2 style="margin:0">📅 2026年8月–12月 规划</h2>
     <button class="btn ghost sm" onclick="calJumpToday()">今天</button>
     <button class="btn ghost sm" onclick="shiftMonth(1)">下月 ›</button></div>
-    <div class="sub">点日期进入当天「每日打卡」；长按日期写日记 / 标记里程碑</div>
+    <div class="sub">点日期进打卡 · 长按写日记</div>
     <div class="cal-grid" id="calGrid"></div>
     <div class="row" style="margin-top:12px;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
       <span style="font-size:12px;color:var(--ink-soft)">学习时长</span>
@@ -1100,8 +1114,8 @@ function renderCal(main){
       <span style="display:flex;align-items:center;gap:4px"><span style="width:18px;height:18px;border-radius:6px;background:#a0cb88"></span><span style="font-size:12px;color:var(--ink-soft)">≥8h</span></span>
     </div>
     <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:14px">
-      <div class="spread"><h3 style="margin:0;font-size:clamp(14px,2.2vw,16px);font-weight:600">🗓️ 月计划（${calMonth}月）</h3><span class="muted" style="font-size:12px">和周计划在一起 · 不另开卡片</span></div>
-      <div class="sub" style="margin-top:4px">本月要拿下的几个大目标（与周计划互补，逐月填写）</div>
+      <div class="spread"><h3 style="margin:0;font-size:clamp(14px,2.2vw,16px);font-weight:600">🗓️ 月计划（${calMonth}月）</h3></div>
+      
       <div id="monthList"></div>
       <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">
         <input type="text" id="mPlanIn" placeholder="任务名，如：发展心理学一轮过完" style="flex:2;min-width:140px">
@@ -1119,8 +1133,8 @@ function renderCal(main){
     </div>
   </div>
     <div class="panel" style="border-radius:clamp(18px,3vw,28px);padding:clamp(14px,3vw,26px)">
-      <div class="spread"><h3 style="margin:0;font-size:clamp(14px,2.2vw,16px);font-weight:600">🗓️ 周计划（持续到 12.21 考研）</h3><span class="muted" style="font-size:12px">当周自动定位 · ‹/› 切换查看与追加 · 数据持久化</span></div>
-      <div class="sub">每周完成什么内容？用下方 ‹上周 / 下周› 切换周次；默认停在当周</div>
+      <div class="spread"><h3 style="margin:0;font-size:clamp(14px,2.2vw,16px);font-weight:600">🗓️ 周计划（至 12.21）</h3></div>
+      <div class="sub">‹ / › 切换周次</div>
       <div id="weekList"></div>
       <div class="row" style="margin-top:10px">
         <input type="text" id="wkAdd" placeholder="快捷添加：自动归入当周（也可在周次下方逐周添加）">
@@ -1240,7 +1254,6 @@ function renderMonthList(){
         <input type="number" min="0" value="${tot}" onchange="monthSetTotalVal(${i},this.value)" style="width:56px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">
         <input type="text" value="${escAttr(unit)}" onchange="monthSetUnit(${i},this.value)" title="单位，如 页/章/个/篇" style="width:52px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;font-size:12px">
         <button class="btn ghost xs" onclick="monthStep(${i},1)">＋</button>
-        ${it.link?'<span class="muted" style="font-size:11px">改这里→进度概况同步更新</span>':''}
       </div>`;
     return `<div class="mp-task">
       <div class="row" style="align-items:center">
@@ -1366,7 +1379,6 @@ function renderProgress(main){
   let html=`
   <div class="panel">
     <div class="spread"><h2 style="margin:0">📊 进度概览</h2><span class="pill">可编辑 · 云同步</span></div>
-    <div class="sub">直接改数字即可，数据随云同步码实时多端同步。英语四卡 / 政治 / 专业课均取自各模块并自动更新。</div>
 
     <div class="prog-sec">🇬🇧 英语（一刷 / 二刷）</div>
     ${engRows}
@@ -1402,8 +1414,8 @@ function renderProgress(main){
   </div>
 
   <div class="panel">
-    <div class="spread"><h3 style="margin:0">🗓️ 月计划进度（按单位统计）</h3><span class="muted" style="font-size:12px">${calMonth}月</span></div>
-    <div class="sub" style="margin-top:4px">每条任务可设单位（页/章/个/篇…）与总量，随时记录完成量</div>
+    <div class="spread"><h3 style="margin:0">🗓️ 月计划进度</h3><span class="muted" style="font-size:12px">${calMonth}月</span></div>
+    
     <div id="monthList"></div>
     <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">
       <input type="text" id="mPlanIn" placeholder="任务名，如：发展心理学一轮过完" style="flex:2;min-width:140px">
@@ -1655,7 +1667,7 @@ function renderTask(main){
   let html=`
   <div class="panel study-card">
     <div class="spread"><h2 style="margin:0">⏱ 每日学习时间</h2><span style="display:inline-flex;gap:6px;align-items:center"><button class="btn ghost sm" onclick="taskJumpToday()">今天</button><span class="pill" id="studyDatePill">${d} <span class="muted" style="font-weight:400">周${weekday}${isToday?' · 今天':''}</span></span></span></div>
-    <div class="sub">每科独立计时，也可直接改分钟数。翻日查看历史，凌晨 00:00 自动归档。</div>
+    <div class="sub">每科独立计时 · ◀▶ 翻日查看</div>
     ${STUDY_SUBJS.map(s=>{
       const sec=isToday?studyLive(s):(state.studyLog[d]||{})[s]||0;
       const pct=Math.min(100,Math.round(sec/(STUDY_TARGET[s]*60)*100));
@@ -1698,7 +1710,7 @@ function renderTask(main){
         <button class="btn ghost sm" onclick="openCalDay('${d}')" title="写日记 / 标记里程碑" style="border-color:var(--c-cal);color:var(--c-cal)">📔</button>
       </div>
     </div>
-    <div class="sub">手动添加 · 自动同步到日历 · 用 ◀▶ 可查看任一天的任务${d!==todayStr()?' · <a href="javascript:copyAllToToday()" style="color:var(--c-task);font-weight:600">📋 复制全部任务到今天</a>':''}</div>
+    <div class="sub">◀▶ 查看任一天${d!==todayStr()?' · <a href="javascript:copyAllToToday()" style="color:var(--c-task);font-weight:600">📋 复制全部到今天</a>':''}</div>
     <div id="taskList"></div>
     <div class="row" style="margin-top:8px">
       <input type="text" id="ntTitle" placeholder="任务内容，如：背发展心理学第5章" style="flex:2">
@@ -2002,7 +2014,7 @@ function editSchedule(){
   </div>`).join('');
   openModal(`
     <h2>📚 编辑今日固定作息</h2>
-    <div class="sub">修改 / 删除每一条；保存后生效，关闭则放弃</div>
+    
     <div id="schedRows">${rows}</div>
     <button class="btn ghost sm" style="margin-top:6px" onclick="editSchedAdd()">+ 添加一行</button>
     <div class="row" style="margin-top:12px;justify-content:flex-end">
@@ -2231,19 +2243,17 @@ function renderKnow(main){
   let html=`
   <div class="panel">
     <div class="spread"><h3 style="margin:0">📚 专业课背诵进度</h3><span class="pill">当前 ${state.know.round} 轮</span></div>
-    <div class="sub">选择轮次，记录各科已背 / 总页数（自动同步至「进度概览」）</div>
     <div class="row" style="margin:8px 0;gap:6px">${[1,2,3,4].map(r=>`<button class="btn ghost sm ${state.know.round===r?'on':''}" onclick="knowSetRound(${r})">${r}轮</button>`).join('')}</div>
     ${KS.map(knowPgRow).join('')}
   </div>
   <div class="panel">
     <h2>💭 心理（347）</h2>
-    <div class="sub">发展心理学 / 心理学导论 / 心理与教育研究方法 — 每条含<b style="color:var(--c-know)">要点 + 详细答案</b>；每周自动轮换精选，也可切到「自选」勾选要练的考点</div>
+    <div class="sub">每周自动轮换 · 可切「自选」勾考点</div>
     <div class="tabs">${tabs}</div>
     <div id="kbBody"></div>
   </div>
   <div class="panel">
     <h3>🤖 AI 考研助手</h3>
-    <div class="sub">离线智能助手（基于 App 内置考点库：心理学347 / 政治 / 时政 / 外刊生词）——可<b>解释知识点</b>、<b>编口诀帮你记忆</b>、给<b>记忆建议</b>。无需联网。</div>
     <textarea id="aiQ" placeholder="输入知识点或考点，如：皮亚杰认知发展阶段 / 矛盾的普遍性与特殊性 / 艾宾浩斯遗忘曲线" style="width:100%;min-height:64px;resize:vertical;font:inherit;font-size:14px;padding:10px;border:1px solid var(--line);border-radius:10px;box-sizing:border-box;color:var(--ink);background:var(--card)"></textarea>
     <div class="row" style="margin-top:8px">
       <button class="btn sm" onclick="aiExplain()">🔍 解释知识点</button>
@@ -2665,7 +2675,6 @@ function renderPol(main){
   </div>
   <div class="panel">
     <h3>🌐 本周时政要闻（${weekKey()}）</h3>
-    <div class="sub">按自然周从题库抽取 4 条，每周自动换新；考前一个月集中看（大牙）。每条 <b>查看原文</b> 链接到对应文章。</div>
     <div id="polSZ"></div>
     <div class="row" style="margin-top:8px">
       <input type="text" id="szT" placeholder="补充要闻标题（可选）">
@@ -2776,7 +2785,6 @@ function renderEng(main){
   if(w.cur!==undefined){ w.y1=w.cur; w.total=w.total||6023; delete w.cur; persist(); }
   const p1=Math.round(w.y1/w.total*100), p2=Math.round(w.y2/w.total*100), p3=Math.round(w.y3/w.total*100);
   let html=`<div class="panel"><div class="spread"><h2>🔤 英语专区</h2><span class="pill">${ph}</span></div>
-    <div class="sub">题型模块训练 · 进度随计划自动更新 · 支持一刷 / 二刷 / 三刷</div>
     <div style="margin:8px 0 4px">
       <div class="subj-card">
         <div class="nm">📚 单词 <span class="muted" style="font-weight:400;font-size:12px">共 ${w.total} 词</span>
@@ -2931,7 +2939,6 @@ function renderWord(main){
   let html=`
   <div class="panel">
     <div class="spread"><h2>🔤 阅读生词</h2><span class="pill">${w.cur+1}/${w.list.length||0} · 我添加的生词</span></div>
-    <div class="sub">这里展示你录入的生词；下方「辅助提示」由内置词库自动给出（无需手输）。</div>
     <div class="wcard">
       <div class="spread">
         <div class="en">${cur.en||'—'}</div>
@@ -2954,8 +2961,8 @@ function renderWord(main){
     </div>
   </div>
   <div class="panel">
-    <h3>🔍 单词搜索（汉语释义 / 词性 / 英文释义）</h3>
-    <div class="sub">输入英文单词，自动查询汉语释义（有道）＋ 词性 ＋ 英文释义（内置词库 ＋ 在线词典，需联网）</div>
+    <h3>🔍 单词搜索</h3>
+    <div class="sub">输入英文自动查释义（需联网）</div>
     <div class="row">
       <input type="text" id="wSearch" placeholder="输入英文单词，如：resilient" onkeydown="if(event.key==='Enter')wordSearch()">
       <button class="btn sm" onclick="wordSearch()">搜索</button>
@@ -2965,7 +2972,7 @@ function renderWord(main){
   </div>
   <div class="panel">
     <h3>录入生词</h3>
-    <div class="sub">只填英文和汉语释义即可，音标会自动从词库补充（点单词卡片上的 🔊 可朗读）</div>
+    <div class="sub">音标自动补充 · 点 🔊 朗读</div>
     <div class="row">
       <input type="text" id="we" placeholder="英文" style="flex:1">
       <input type="text" id="wc" placeholder="中文释义" style="flex:1.6">
@@ -4287,7 +4294,7 @@ function renderArt(main){
   const a=ARTICLES[i];
   const remain=Math.max(0,3-(state._artSwaps||0));
   let html=`<div class="panel"><div class="spread"><h2>📰 英文外刊阅读</h2><span class="pill">本周 1 篇（${wk}）</span></div>
-    <div class="sub">每周一篇不同外刊 · 原文与译文逐段对照（手机上下、平板左右）· 本周还可换 ${remain} 次</div>
+    <div class="sub">可换 ${remain} 次</div>
     <div class="art-inline">${articleInner(i)}</div>
     <div class="row" style="margin-top:12px;justify-content:flex-end">
       <button class="btn ghost sm" onclick="artSwap()">🔄 换一篇（本周剩 ${remain} 次）</button>
@@ -4524,7 +4531,7 @@ function renderSent(main){
   const i=pick[state._sentIdx%pick.length];
   const s=SENTENCES[i];
   let html=`<div class="panel"><div class="spread"><h2>📝 长难句精读</h2><span class="pill">本周 ${pick.length} 句（${wk}）</span></div>
-    <div class="sub">每周轮换 3 句 · 逐句拆解 · 语法分析 · 翻译练习 · ◀/▶ 切换</div>
+    <div class="sub">每周 3 句 · ◀/▶ 切换</div>
     <div class="row" style="margin-top:6px;justify-content:space-between;align-items:center">
       <button class="btn ghost sm" onclick="sentSwitch(-1)">◀ 上一句</button>
       <span class="muted" style="font-size:13px">第 ${state._sentIdx+1}/${pick.length} 句</span>
@@ -4540,7 +4547,6 @@ function renderSent(main){
   </div>
   <div class="panel">
     <div class="spread"><h2>🧩 我的长难句（随手拆）</h2><span class="pill">${state.mySent?state.mySent.length:0} 句</span></div>
-    <div class="sub">手动输入，或拍照识别纸质书里的句子 → 添加后自动<b>拆分结构、标注语法点、给翻译思路</b>。纯前端规则分析，离线可用。</div>
     <div class="my-sent-box">
       <textarea id="mySentInput" placeholder="粘贴或输入一句英文长难句，例如：It is the interaction between people, rather than the events that occur in their lives, that determines who they become."></textarea>
       <div class="row" style="margin-top:8px">
@@ -4741,7 +4747,6 @@ const KY_WORDS = [
 function renderFun(main){
   let html=`
   <div class="panel"><h2>🎮 娱乐区</h2>
-    <div class="sub">学累了就来玩一会 · 英语配对 / 记忆翻牌 / 随机吃什么</div>
     <div class="tabs">
       <button class="tab on" onclick="funTab('match',this)">🔤 单词配对</button>
       <button class="tab" onclick="funTab('memory',this)">🧠 记忆翻牌</button>
@@ -4795,7 +4800,7 @@ function matchHTML(){
   };
   return `<div class="game-box">
     <div class="spread"><b>🔤 单词配对</b><span class="muted" id="matchInfo">点英文再点中文</span></div>
-    <div class="sub" style="font-size:12px">词库：考研高频核心 ${KY_WORDS.length} 词 · 本局随机抽 ${pairs.length} 对 · 点「＋」选词，可加入生词本</div>
+    <div class="sub" style="font-size:12px">高频核心 ${KY_WORDS.length} 词 · 本局 ${pairs.length} 对</div>
     <div class="match-grid" id="matchGrid">
       ${left.map(en=>cell(en)).join('')}
       ${right.map(cn=>`<div class="match-cell" data-cn="${cn}" onclick="matchPick(this)">${cn}</div>`).join('')}
@@ -4857,7 +4862,7 @@ function memoryHTML(){
   cards=cards.sort(()=>Math.random()-.5);
   memData={cards,open:[],matched:new Set(),el:[]};
   return `<div class="game-box"><div class="spread"><b>🧠 记忆翻牌</b><span class="muted">翻开配对 英文⇄中文</span></div>
-    <div class="sub" style="font-size:12px">词库：考研高频核心 ${KY_WORDS.length} 词 · 本局随机抽 ${n} 对</div>
+    <div class="sub" style="font-size:12px">高频核心 ${KY_WORDS.length} 词 · 本局 ${n} 对</div>
     <div class="flip-grid" id="memGrid">
       ${cards.map((c,i)=>`<div class="flip" onclick="memFlip(${i},this)"><i>？</i></div>`).join('')}
     </div>
@@ -4885,7 +4890,7 @@ const FOODS=[
 ];
 function foodHTML(){
   return `<div class="game-box">
-    <div class="spread"><b>🍱 随机吃什么</b><span class="muted">帮你点外卖不纠结</span></div>
+    <div class="spread"><b>🍱 随机吃什么</b></div>
     <div class="food-wheel" id="foodWheel">🤔 该吃点啥？</div>
     <div class="row" style="justify-content:center">
       <button class="btn" onclick="foodPick()">🎲 帮我选！</button>
@@ -4965,7 +4970,7 @@ function renderSide(){
   </div>
   <div class="panel" style="cursor:pointer" onclick="showModule('cloud')">
     <div class="spread"><h3 style="margin-top:0;margin-bottom:0">☁️ 云同步</h3><a class="btn ghost sm" href="javascript:showModule('cloud')" onclick="event.stopPropagation()">去同步 ›</a></div>
-    <div class="sub">点此进入云同步模块：备份 / 恢复 / 实时互相同步。</div>
+    <div class="sub">备份 / 恢复 / 多端同步</div>
   </div>`;
   return html;
 }
@@ -5219,7 +5224,7 @@ function renderCloud(main){
   let html=`
   <div class="panel">
     <div class="spread"><h3 style="margin-top:0">🐙 GitHub 自动备份（推荐）</h3><span class="pill">${g.on?'已开启':'未开启'}</span></div>
-    <div class="sub">数据直接存进<b>你自己的 GitHub 私有仓库</b>，不怕后台挂掉；手机、平板都填同一仓库即可互相备份、换设备恢复。照片仅保存在本机、不进入 GitHub（避免闪退）。</div>
+    <div class="sub">数据存在<b>你自己的 GitHub 私有仓库</b>；照片仅保存在本机</div>
     <div class="row" style="margin-top:8px;align-items:center">
       <input type="text" id="ghOwner" placeholder="GitHub 用户名" value="${(g.owner)||''}" style="flex:1" oninput="ghSet('owner',this.value)">
       <input type="text" id="ghRepo" placeholder="仓库名" value="${(g.repo)||''}" style="flex:1" oninput="ghSet('repo',this.value)">
@@ -5240,7 +5245,6 @@ function renderCloud(main){
   </div>
   <div class="panel">
     <h3 style="margin-top:0">⚙️ 数据管理</h3>
-    <div class="sub">本地文件备份只作为备用；日常建议直接用上面的 GitHub 自动备份。</div>
     <div class="row" style="margin-top:6px">
       <button class="btn ghost sm" onclick="exportBackup()">本地导出</button>
       <div class="upload-wrap"><span class="btn ghost sm" style="cursor:pointer">本地导入</span><input type="file" id="impFile" accept="*/*" onchange="importBackup(this)"></div>
