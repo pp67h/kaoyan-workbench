@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.8.21.5-->
+<!--APP_VER:2026.8.21.6-->
 <style>
 :root{
   --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
@@ -163,16 +163,33 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 
 /* ===== 日历 ===== */
 .cal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
-.cal-dow{text-align:center;font-size:11px;color:var(--ink-soft);padding:4px 0}
-.cal-cell{aspect-ratio:1/1;border-radius:10px;background:var(--paper2);border:1px solid var(--line);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:13px;position:relative;padding:2px}
-.cal-cell.today{background:var(--c-home);color:#fff;border-color:var(--c-home)}
-.cal-cell.mile{box-shadow:inset 0 0 0 2px var(--c-know)}
-.cal-cell .dot{width:6px;height:6px;border-radius:50%;background:var(--c-know);position:absolute;bottom:5px}
-.cal-cell .mdot{width:6px;height:6px;border-radius:50%;background:#36b87c;position:absolute;bottom:5px;right:6px}
-.cal-cell .tdt{width:7px;height:7px;border-radius:50%;background:var(--c-home);position:absolute;top:5px;left:5px;border:1.5px solid #fff}
+.cal-head h2{font-size:18px;font-weight:600;color:#8B5A3A;letter-spacing:.5px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.cal-dow{text-align:center;font-size:12px;color:#BC8F6B;padding:4px 0;font-weight:450}
+.cal-cell{aspect-ratio:1/1;border-radius:12px;background:#F8FAF5;border:1px solid transparent;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:13px;position:relative;padding:2px;min-height:44px;
+  transition:0.15s ease}
+.cal-cell .cal-date{font-size:11px;color:#C9B8A8;line-height:1.2;margin-bottom:1px}
+.cal-cell .cal-hours{font-size:13px;font-weight:550;color:#8FAF7A;line-height:1.2}
+.cal-cell.today{border:2px solid #A8D08D;background:#F4F9EE;box-shadow:0 0 0 2px var(--card)}
+.cal-cell.today .cal-date,.cal-cell.today .cal-hours{color:#6E8F5A}
+.cal-cell.mile{box-shadow:inset 0 0 0 2px #DCEAD0}
+.cal-cell .dot{width:6px;height:6px;border-radius:50%;background:#DCEAD0;position:absolute;bottom:5px}
+.cal-cell .mdot{width:6px;height:6px;border-radius:50%;background:#A8D08D;position:absolute;bottom:5px;right:6px}
+.cal-cell .tdt{width:7px;height:7px;border-radius:50%;background:#C5DFB3;position:absolute;top:5px;left:5px;border:1.5px solid #fff}
 .cal-cell.dim{opacity:.35}
+/* 抹茶色阶热力图 */
+.cal-cell.heat-0{background:#F8FAF5}
+.cal-cell.heat-0 .cal-hours{color:#B8C9A8}
+.cal-cell.heat-1{background:#EEF5E8}
+.cal-cell.heat-1 .cal-hours{color:#8FAF7A}
+.cal-cell.heat-2{background:#DCEAD0}
+.cal-cell.heat-2 .cal-hours{color:#6E8F5A}
+.cal-cell.heat-3{background:#C5DFB3}
+.cal-cell.heat-3 .cal-hours{color:#4A6B3A}
+.cal-cell.heat-4{background:#A8D08D}
+.cal-cell.heat-4 .cal-hours{color:#fff}
+.cal-cell.heat-4 .cal-date{color:#F0F7E8}
 
 /* ===== 任务 ===== */
 .task{border:1.5px solid var(--line);border-radius:14px;padding:11px 12px;margin:8px 0;background:var(--paper2);
@@ -350,11 +367,16 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 .mc-add.on{background:var(--c-task)}
 .mc-add.done{background:#bbb;cursor:default}
 .match-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding-top:8px;border-top:1px dashed var(--line)}
-.mp-task{margin:8px 0;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+.mp-task{margin:8px 0;padding:10px 12px;border:none;border-bottom:1px dashed #F0E5D8;border-radius:0;background:transparent}
 .mp-row{display:flex;justify-content:space-between;align-items:center;font-size:13px}
-.mp-row b{font-size:13px;color:var(--ink)}
-.bar{height:7px;border-radius:6px;background:#ececec;overflow:hidden;margin:6px 0}
-.bar i{display:block;height:100%;background:var(--c-cal);transition:width .25s}
+.mp-row b{font-size:13px;color:#6E8F5A}
+.mp-row .muted{color:#BC8F6B}
+.mp-task input[type=checkbox]{width:18px;height:18px;border:2px solid #DCEAD0;border-radius:6px;background:#F8FAF5;flex-shrink:0;accent-color:#A8D08D}
+.mp-task .btn.ghost.xs{border:1px solid #DCEAD0;background:#F8FAF5;color:#6E8F5A}
+.bar{height:8px;border-radius:20px;background:#EEE8DD;overflow:hidden;margin:6px 0}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,#DCEAD0,#A8D08D);border-radius:20px;transition:width .25s}
+.bar2{height:8px;background:#EEE8DD;border-radius:20px;overflow:hidden}
+.bar2 > i{display:block;height:100%;border-radius:20px;background:linear-gradient(90deg,#C5DFB3,#A8D08D)}
 .flip-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .flip{perspective:600px;aspect-ratio:1/1}
 .flip i{display:block;width:100%;height:100%;border-radius:12px;transform-style:preserve-3d;transition:.4s;
@@ -1046,48 +1068,47 @@ function resetKeyDates(){ state.keyDates=[]; persist(); renderHome($('#main')); 
 function renderCal(main){
   const d=new Date('2026-08-01');
   const weeks=getWeeks(2026,8,10);
-  let html=`<div class="panel"><div class="cal-head">
+  let html=`<div class="panel" style="background:#FFFDF7;border-radius:32px;padding:28px 24px;box-shadow:0 12px 40px rgba(180,140,100,.12);border:1px solid #F5E6D3"><div class="cal-head">
     <button class="btn ghost sm" onclick="shiftMonth(-1)">‹ 上月</button>
     <h2 style="margin:0">📅 2026年8月–12月 规划</h2>
     <button class="btn ghost sm" onclick="calJumpToday()">今天</button>
     <button class="btn ghost sm" onclick="shiftMonth(1)">下月 ›</button></div>
-    <div class="sub">点日期进入当天「每日打卡」；长按日期写日记 / 标记里程碑</div>
+    <div class="sub" style="color:#BC8F6B">点日期进入当天「每日打卡」；长按日期写日记 / 标记里程碑</div>
     <div class="cal-grid" id="calGrid"></div>
-    <div class="row" style="margin-top:8px;align-items:center;gap:4px;flex-wrap:wrap">
-      <span class="muted" style="font-size:11px">学习时长：</span>
-      <span style="width:14px;height:14px;border-radius:4px;background:var(--paper2);border:1px solid var(--line)"></span>
-      <span class="muted" style="font-size:11px">少</span>
-      <span style="width:14px;height:14px;border-radius:4px;background:rgba(196,142,90,.35)"></span>
-      <span style="width:14px;height:14px;border-radius:4px;background:rgba(160,100,55,.65)"></span>
-      <span style="width:14px;height:14px;border-radius:4px;background:rgba(120,70,35,.92)"></span>
-      <span class="muted" style="font-size:11px">多（≥7小时最深）</span>
+    <div class="row" style="margin-top:12px;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+      <span style="font-size:13px;color:#8B6B55">学习时长</span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:20px;border-radius:6px;background:#F8FAF5;border:1px solid #EEE5D8"></span><span style="font-size:13px;color:#8B6B55">0-2h</span></span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:20px;border-radius:6px;background:#EEF5E8"></span><span style="font-size:13px;color:#8B6B55">2-4h</span></span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:20px;border-radius:6px;background:#DCEAD0"></span><span style="font-size:13px;color:#8B6B55">4-6h</span></span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:20px;border-radius:6px;background:#C5DFB3"></span><span style="font-size:13px;color:#8B6B55">6-8h</span></span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:20px;border-radius:6px;background:#A8D08D"></span><span style="font-size:13px;color:#8B6B55">≥8h</span></span>
     </div>
-    <div style="margin-top:14px;border-top:1px dashed var(--line);padding-top:12px">
-      <div class="spread"><h3 style="margin:0">🗓️ 月计划（${calMonth}月）</h3><span class="muted" style="font-size:12px">和周计划在一起 · 不另开卡片</span></div>
-      <div class="sub" style="margin-top:4px">本月要拿下的几个大目标（与周计划互补，逐月填写）</div>
+    <div style="margin-top:16px;border-top:1px solid #F0E3D6;padding-top:20px">
+      <div class="spread"><h3 style="margin:0;color:#8B5A3A;font-size:16px;font-weight:600">🗓️ 月计划（${calMonth}月）</h3><span style="font-size:12px;color:#BC8F6B">和周计划在一起 · 不另开卡片</span></div>
+      <div class="sub" style="margin-top:4px;color:#BC8F6B">本月要拿下的几个大目标（与周计划互补，逐月填写）</div>
       <div id="monthList"></div>
       <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">
         <input type="text" id="mPlanIn" placeholder="任务名，如：发展心理学一轮过完" style="flex:2;min-width:140px">
         <input type="number" id="mPlanTotal" min="0" placeholder="总量" style="width:70px" title="该任务的总量">
         <input type="text" id="mPlanUnit" placeholder="单位" style="width:60px" title="单位，如 页 / 章 / 个 / 篇">
-        <button class="btn sm" onclick="monthAdd()">添加</button>
+        <button class="btn sm" style="background:#6E8F5A" onclick="monthAdd()">添加</button>
       </div>
       <div class="row" style="margin-top:6px;gap:8px;align-items:center">
-        <span class="muted" style="font-size:12px;white-space:nowrap">🔗 关联进度：</span>
-        <select id="mPlanLink" style="flex:1;min-width:140px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;font-size:13px">
+        <span style="font-size:12px;white-space:nowrap;color:#BC8F6B">🔗 关联进度：</span>
+        <select id="mPlanLink" style="flex:1;min-width:140px;padding:4px 6px;border:1px solid #F0E3D6;border-radius:6px;font-size:13px">
           <option value="">不关联（独立任务）</option>
           ${progressLinkOptions().map(o=>`<option value="${o.link}">${o.label}（${o.cur}/${o.total}）</option>`).join('')}
         </select>
       </div>
     </div>
   </div>
-    <div class="panel">
-      <div class="spread"><h3 style="margin:0">🗓️ 周计划（持续到 12.21 考研）</h3><span class="muted" style="font-size:12px">当周自动定位 · ‹/› 切换查看与追加 · 数据持久化</span></div>
-      <div class="sub">每周完成什么内容？用下方 ‹上周 / 下周› 切换周次；默认停在当周</div>
+    <div class="panel" style="background:#FFFDF7;border-radius:32px;padding:28px 24px;box-shadow:0 12px 40px rgba(180,140,100,.12);border:1px solid #F5E6D3">
+      <div class="spread"><h3 style="margin:0;color:#8B5A3A;font-size:16px;font-weight:600">🗓️ 周计划（持续到 12.21 考研）</h3><span style="font-size:12px;color:#BC8F6B">当周自动定位 · ‹/› 切换查看与追加 · 数据持久化</span></div>
+      <div class="sub" style="color:#BC8F6B">每周完成什么内容？用下方 ‹上周 / 下周› 切换周次；默认停在当周</div>
       <div id="weekList"></div>
       <div class="row" style="margin-top:10px">
         <input type="text" id="wkAdd" placeholder="快捷添加：自动归入当周（也可在周次下方逐周添加）">
-        <button class="btn sm" onclick="weekAdd()">添加</button>
+        <button class="btn sm" style="background:#6E8F5A" onclick="weekAdd()">添加</button>
       </div>
     </div>`;
   main.innerHTML=html;
@@ -1192,7 +1213,7 @@ function renderMonthList(){
     const cur=Math.max(0,Math.min(tot,Number(it.cur)||0));
     const pct=tot?Math.round(cur/tot*100):0;
     const unit=it.unit||'页';
-    const linkBadge=it.link?'<span class="chip" style="font-size:10px;background:var(--c-prog);color:#fff;padding:1px 6px;border-radius:8px">🔗 已关联进度</span>':'';
+    const linkBadge=it.link?'<span class="chip" style="font-size:10px;background:#DCEAD0;color:#4A6B3A;padding:1px 6px;border-radius:8px;border:none">🔗 已关联进度</span>':'';
     const progUi=`
       <div class="mp-row" style="margin-top:6px"><span class="muted">进度 ${cur} / ${tot} ${unit}</span><b>${pct}%</b></div>
       <div class="bar"><i style="width:${pct}%"></i></div>
@@ -1502,15 +1523,21 @@ function syncProgressFromMonthPlan(changedItem){
   setProgressByLink(changedItem.link,changedItem.cur,changedItem.total);
 }
 let calMonth=8;
-// 按当天学习时长返回热力背景色（分钟数越高颜色越深）
+// 按当天学习时长返回抹茶热力等级（0-4）
+function studyHeatGrade(sec){
+  const h=(sec||0)/3600;
+  if(h<=0) return -1;
+  if(h<2) return 0;
+  if(h<4) return 1;
+  if(h<6) return 2;
+  if(h<8) return 3;
+  return 4;
+}
+// 按当天学习时长返回热力背景色（旧接口保留，用于非网格场景）
 function studyHeat(sec){
-  const m=Math.floor((sec||0)/60);
-  if(m<=0) return '';
-  // 人民币明亮暖色渐变：20元金 → 100元明亮珊瑚红
-  const steps=[[0,'rgba(240,168,48,0.12)'],[30,'rgba(232,144,48,0.24)'],[60,'rgba(232,116,74,0.38)'],[120,'rgba(232,93,74,0.52)'],[240,'rgba(212,80,58,0.68)'],[420,'rgba(180,60,42,0.82)']];
-  let c=steps[0][1];
-  for(const s of steps){ if(m>=s[0]) c=s[1]; }
-  return c;
+  const grade=studyHeatGrade(sec);
+  const colors=['','rgba(238,245,232,0.7)','rgba(220,234,208,0.8)','rgba(197,223,179,0.85)','rgba(168,208,141,0.9)'];
+  return grade>=0&&grade<colors.length?colors[grade]:'';
 }
 function drawCalendar(month){
   const grid=$('#calGrid'); if(!grid) return;
@@ -1529,16 +1556,15 @@ function drawCalendar(month){
     let extra='';
     if(state.calMile[ds]) extra+='<span class="mdot"></span>';
     const st=state.calStat[ds];
-    if(st&&st.plan>0) extra+=`<span class="dot" style="background:${st.done/st.plan>=0.8?'var(--c-task)':'var(--c-home)'}"></span>`;
+    if(st&&st.plan>0) extra+=`<span class="dot" style="background:${st.done/st.plan>=0.8?'#A8D08D':'#C5DFB3'}"></span>`;
     if(state.tasks[ds]&&state.tasks[ds].length) extra+='<span class="tdt" title="有任务"></span>';
-    c.innerHTML=`<div>${dd}</div>${extra}`;
-    // 学习时长热力：除了"今天"保持蓝色高亮外，其余按当天学习时长着色
-    if(ds!==today){
-      const sec=studyTotalDay(ds);
-      const heat=studyHeat(sec);
-      if(heat){ c.style.background=heat; c.style.borderColor='rgba(230,169,28,.25)'; }
-      if(sec>0) c.title=fmtHumi(sec)+' · 学习时长';
-    }
+    // 抹茶热力等级
+    const sec=studyTotalDay(ds);
+    const grade=studyHeatGrade(sec);
+    if(grade>=0 && ds!==today) c.classList.add('heat-'+grade);
+    const hoursStr=sec>0?(sec/3600).toFixed(1):'';
+    c.innerHTML=`<span class="cal-date">${dd}</span>${hoursStr?`<span class="cal-hours">${hoursStr}</span>`:''}${extra}`;
+    if(sec>0) c.title=fmtHumi(sec)+' · 学习时长';
     c.onclick=()=>gotoTaskAt(ds);
     // 长按日期：写日记 / 里程碑（原弹窗保留）
     c.addEventListener('contextmenu',(e)=>{ e.preventDefault(); openCalDay(ds); });
