@@ -514,6 +514,8 @@ const APP_ICON_PNG='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAA
 
 /* ---------- 云同步后端地址（APK 内 WebView 为 file:// 跨域，必须用绝对地址） ---------- */
 const SYNC_BASE = "https://a9963a66ed6b75a25.gz4.agentos-app.net";
+/* ---------- 线上站点（GitHub Pages，自动更新与 APK 下载都走这里） ---------- */
+const SITE_BASE = "https://pp67h.github.io/kaoyan-workbench";
 
 /* ---------- 角色：圆脸小苗（顶芽拿书） ---------- */
 const CORN_SVG = `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
@@ -5221,7 +5223,7 @@ async function syncNow(forcePull){
   const st=$('#syncStatus'); if(st) st.textContent=syncStatusText();
 }
 /* ===== App 版本更新（APK 一键更新）===== */
-var APK_VER_URL=SYNC_BASE+'/version.json';
+var APK_VER_URL=SITE_BASE+'/version.json';
 var APK_DEFAULT_INSTALLED='v30'; /* 功能上线前最后发出去的 APK 版本 */
 function apkInstalled(){
   try{ return localStorage.getItem('apkInstalled')||APK_DEFAULT_INSTALLED; }catch(_){ return APK_DEFAULT_INSTALLED; }
@@ -5245,7 +5247,7 @@ function apkRender(v){
   var box=document.getElementById('apkBox'); if(!box||!v) return;
   var mine=apkInstalled();
   var same=(mine===v.version);
-  var url=SYNC_BASE+'/'+(v.apk||'latest.apk');
+  var url=/^https?:/.test(v.apk||'') ? v.apk : SITE_BASE+'/'+(v.apk||'latest.apk');
   var pill=document.getElementById('apkMinePill');
   if(pill) pill.textContent='已装 '+mine;
   box.innerHTML=
@@ -5847,7 +5849,7 @@ showModule('home');
   }
   function swapRemote(html){
     if(location.protocol==='file:'){
-      html=html.replace(/<head([^>]*)>/i,'<head$1><base href="'+SYNC_BASE+'/">');
+      html=html.replace(/<head([^>]*)>/i,'<head$1><base href="'+SITE_BASE+'/">');
       document.open(); document.write(html); document.close();
     }else{
       location.reload(true);
@@ -5856,7 +5858,7 @@ showModule('home');
   function check(){
     try{
       /* APK(file://)内比对托管版；网页内比对自身地址 */
-      var url = (location.protocol==='file:') ? (SYNC_BASE + '/index.html') : location.href.split('#')[0];
+      var url = (location.protocol==='file:') ? (SITE_BASE + '/index.html') : location.href.split('#')[0];
       fetch(url,{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){
         var mm=t.match(/APP_VER:([\d.]+)/);
         var remote=mm?mm[1]:null;
