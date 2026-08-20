@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.8.21.11-->
+<!--APP_VER:2026.8.21.12-->
 <style>
 :root{
   --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
@@ -221,6 +221,22 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 .cal-cell.heat-4 .cal-date{color:#f2f7e6}
 
 /* ===== 任务 ===== */
+.study-hist{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.study-hist-time{font-size:clamp(15px,2.4vw,19px);font-weight:700;color:var(--c-task);line-height:1.3;white-space:nowrap}
+/* 三段式日期导航：左·前一天 中·今天/日期 右·后一天 */
+.daynav{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;width:100%}
+.daynav .dn-l,.daynav .dn-r{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px}
+.daynav .dn-c{flex:1 1 auto;display:flex;justify-content:center;align-items:center;gap:6px;min-width:0}
+/* 挤不下时（手机）：中间内容另起第二排，靠左 */
+@media(max-width:480px){
+  .daynav.can-wrap .dn-c{flex-basis:100%;order:3;justify-content:flex-start}
+  .daynav.can-wrap .dn-r{margin-left:auto}
+}
+/* 计数器组：宽屏跟在标题右侧；窄屏放不下就整组换行到第二排靠左 */
+.nm-tools{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-start;align-items:center;margin-left:auto}
+@media(max-width:640px){
+  .subj-card .nm-tools{margin-left:0;flex-basis:100%;justify-content:flex-start}
+}
 .task{border:1.5px solid var(--line);border-radius:14px;padding:11px 12px;margin:8px 0;background:var(--paper2);
   border-left:6px solid var(--subj,#999);display:flex;gap:10px;align-items:flex-start}
 .task .tmain{flex:1;min-width:0}
@@ -1668,7 +1684,7 @@ function renderTask(main){
   const weekday=['日','一','二','三','四','五','六'][new Date(d+'T00:00:00').getDay()];
   let html=`
   <div class="panel study-card">
-    <div class="spread"><h2 style="margin:0">⏱ 每日学习时间</h2><span style="display:inline-flex;gap:6px;align-items:center"><button class="btn ghost sm" onclick="taskJumpToday()">今天</button><span class="pill" id="studyDatePill">${d} <span class="muted" style="font-weight:400">周${weekday}${isToday?' · 今天':''}</span></span></span></div>
+    <div class="spread"><h2 style="margin:0">⏱ 每日学习时间</h2><span class="pill" id="studyDatePill">${d} <span class="muted" style="font-weight:400">周${weekday}${isToday?' · 今天':''}</span></span></div>
     <div class="sub">每科独立计时 · ◀▶ 翻日查看</div>
     ${STUDY_SUBJS.map(s=>{
       const sec=isToday?studyLive(s):(state.studyLog[d]||{})[s]||0;
@@ -1691,26 +1707,28 @@ function renderTask(main){
       <b>当日总计</b>
       <span class="chip" id="studyTotalChip" style="background:var(--c-task);color:#fff">${fmtHumi(studyTotalDay(d))} / 目标 9 小时</span>
     </div>
-    <div class="study-hist" style="margin-top:14px">
-      <button class="btn ghost sm" onclick="taskShiftDay(-1)">◀ 前一天</button>
-      <div style="text-align:center">
-        <div class="muted" style="font-size:12px">${d} 累计</div>
-        <div class="study-hist-time" id="studyHistTime">${fmtHumi(studyTotalDay(d))}</div>
-      </div>
-      <button class="btn ghost sm" onclick="taskJumpToday()">今天</button>
-      <button class="btn ghost sm" onclick="taskShiftDay(1)">后一天 ▶</button>
+    <div class="daynav" style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)">
+      <span class="dn-l"><button class="btn ghost sm" onclick="taskShiftDay(-1)">◀ 前一天</button></span>
+      <span class="dn-c"><button class="btn ghost sm" onclick="taskJumpToday()">今天</button></span>
+      <span class="dn-r"><button class="btn ghost sm" onclick="taskShiftDay(1)">后一天 ▶</button></span>
+    </div>
+    <div class="spread" style="margin-top:8px;align-items:baseline">
+      <span class="muted" style="font-size:12px;white-space:nowrap">${d} 累计</span>
+      <span class="study-hist-time" id="studyHistTime">${fmtHumi(studyTotalDay(d))}</span>
     </div>
   </div>
   <div class="panel">
-    <div class="spread" style="align-items:center">
-      <h3 style="margin:0">📝 每日任务</h3>
-      <div class="row" style="gap:6px;align-items:center">
-        <button class="btn ghost sm" onclick="taskShiftDay(-1)">◀ 前一天</button>
+    <h3 style="margin:0 0 8px">📝 每日任务</h3>
+    <div class="daynav can-wrap" style="margin-bottom:4px">
+      <span class="dn-l"><button class="btn ghost sm" onclick="taskShiftDay(-1)">◀ 前一天</button></span>
+      <span class="dn-c">
         <span class="pill" id="taskViewDatePill">${d} <span class="muted" style="font-weight:400">周${weekday}${isToday?' · 今天':''}</span></span>
-        <button class="btn ghost sm" onclick="taskJumpToday()">今天</button>
-        <button class="btn ghost sm" onclick="taskShiftDay(1)">后一天 ▶</button>
+        ${d!==todayStr()?'<button class="btn ghost sm" onclick="taskJumpToday()">今天</button>':''}
+      </span>
+      <span class="dn-r">
         <button class="btn ghost sm" onclick="openCalDay('${d}')" title="写日记 / 标记里程碑" style="border-color:var(--c-cal);color:var(--c-cal)">📔</button>
-      </div>
+        <button class="btn ghost sm" onclick="taskShiftDay(1)">后一天 ▶</button>
+      </span>
     </div>
     <div class="sub">◀▶ 查看任一天${d!==todayStr()?' · <a href="javascript:copyAllToToday()" style="color:var(--c-task);font-weight:600">📋 复制全部到今天</a>':''}</div>
     <div id="taskList"></div>
@@ -2790,7 +2808,7 @@ function renderEng(main){
     <div style="margin:8px 0 4px">
       <div class="subj-card">
         <div class="nm"><span>📚 单词 <span class="muted" style="font-weight:400;font-size:12px">共 ${w.total} 词</span></span>
-          <span class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto">
+          <span class="nm-tools">
           <span class="stepper"><button onclick="vocabStep('y1',-1)">−</button><b>一刷 ${w.y1}</b><button onclick="vocabStep('y1',1)">+</button></span>
           <span class="stepper"><button onclick="vocabStep('y2',-1)">−</button><b>二刷 ${w.y2}</b><button onclick="vocabStep('y2',1)">+</button></span>
           <span class="stepper"><button onclick="vocabStep('y3',-1)">−</button><b>三刷 ${w.y3}</b><button onclick="vocabStep('y3',1)">+</button></span></span></div>
@@ -2818,7 +2836,7 @@ function renderEng(main){
     const o=e[tp]; const p1=Math.round(o.y1/o.total*100), p2=Math.round(o.y2/o.total*100);
     html+=`<div class="subj-card">
       <div class="nm"><span>${tp} <span class="muted" style="font-weight:400;font-size:12px">共 ${o.total} 篇</span></span>
-        <span class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto">
+        <span class="nm-tools">
         <span class="stepper"><button onclick="engStep('${tp}',1,-1)">−</button><b>一刷 ${o.y1}</b><button onclick="engStep('${tp}',1,1)">+</button></span>
         <span class="stepper"><button onclick="engStep('${tp}',2,-1)">−</button><b>二刷 ${o.y2}</b><button onclick="engStep('${tp}',2,1)">+</button></span></span></div>
       <div class="bar" style="--accent:var(--c-eng);margin-top:6px"><i style="width:${p1}%"></i></div>
@@ -5226,6 +5244,14 @@ async function syncNow(forcePull){
 var APK_VER_URL=SITE_BASE+'/version.json';
 var APK_DEFAULT_INSTALLED='v30'; /* 功能上线前最后发出去的 APK 版本 */
 function apkInstalled(){
+  /* 原生接口能直接读到 APK 版本号（v31+）；旧 APK 退回本地记录 */
+  try{
+    if(window.Android && typeof window.Android.appVersion==='function'){
+      var v=window.Android.appVersion();
+      if(v && v.indexOf('2026.8.22')===0) return 'v31';
+      if(v) return 'v30';
+    }
+  }catch(_){}
   try{ return localStorage.getItem('apkInstalled')||APK_DEFAULT_INSTALLED; }catch(_){ return APK_DEFAULT_INSTALLED; }
 }
 async function apkCheck(){
@@ -5243,6 +5269,9 @@ async function apkCheck(){
     box.innerHTML='<div class="sub" style="margin:8px 0 0">❌ 检查失败（'+e.message+'），需联网，稍后再试</div>';
   }
 }
+function apkCanAuto(){
+  return !!(window.Android && typeof window.Android.installApk==='function');
+}
 function apkRender(v){
   var box=document.getElementById('apkBox'); if(!box||!v) return;
   var mine=apkInstalled();
@@ -5250,8 +5279,23 @@ function apkRender(v){
   var url=/^https?:/.test(v.apk||'') ? v.apk : SITE_BASE+'/'+(v.apk||'latest.apk');
   var pill=document.getElementById('apkMinePill');
   if(pill) pill.textContent='已装 '+mine;
+  var auto=apkCanAuto();
+  var btn=auto
+    ? '<button class="btn sm" onclick="apkGo(\''+url+'\',\''+v.version+'\')">🔄 一键更新到 '+v.version+'</button>'
+    : '<a class="btn sm" style="text-decoration:none" href="'+url+'" target="_blank" rel="noopener">⬇️ 下载 '+v.version+' 安装包'+(v.size?'（'+v.size+'）':'')+'</a>';
+  var guide=auto
+    ? '<div class="sub" style="margin:8px 0 0">点一下就行：自动后台下载 → 自动弹出安装 → 装完打开 App 就是新版，全程不用浏览器</div>'
+    : '<div style="margin-top:10px;padding:10px 12px;border:1.5px dashed var(--line);border-radius:12px;background:var(--paper);font-size:12.5px;line-height:2">'+
+        '<b style="color:var(--c-cloud)">🔑 旧版 App 没有自动安装能力，需一次性换装 '+v.version+'（约 1 分钟，仅此一次）：</b><br>'+
+        '① 本页开启 GitHub 自动备份，点一次备份确认成功<br>'+
+        '② 卸载手机上的旧版 App（换了新签名，必须先卸载）<br>'+
+        '③ 点上方按钮下载 '+v.version+' 安装；弹出「允许安装」点允许<br>'+
+        '④ 打开新 App → GitHub 恢复数据 → 完成<br>'+
+        '<b>之后所有新版本：只点「🔄 一键更新」→ 自动下载 → 自动弹安装，再也不用手动下载</b>'+
+      '</div>'+
+      '<div class="sub" style="margin:8px 0 0">功能和界面更新本来就是全自动的（重开 App 即最新），这里只管 App 本体</div>';
   box.innerHTML=
-    '<div class="row" style="margin-top:8px;align-items:center">'+
+    '<div class="row" style="margin-top:8px;align-items:center;flex-wrap:wrap;gap:6px">'+
       '<span class="pill">最新 '+v.version+'</span>'+
       (same
         ?'<span class="pill" style="background:#d8e8be;color:#4a6b3a">✓ 已是最新</span>'
@@ -5259,12 +5303,16 @@ function apkRender(v){
       '<span class="muted" style="font-size:11px">'+(v.date||'')+'</span>'+
     '</div>'+
     '<div style="font-size:12.5px;margin-top:6px;line-height:1.7;color:var(--ink)">'+(v.changelog||[]).map(function(c){return '· '+c;}).join('<br>')+'</div>'+
-    '<div class="row" style="margin-top:8px">'+
-      '<a class="btn sm" style="text-decoration:none" href="'+url+'" target="_blank" rel="noopener">⬇️ 下载新 APK'+(v.size?'（'+v.size+'）':'')+'</a>'+
-      '<button class="btn ghost sm" onclick="apkCopyLink(\''+url+'\')">📋 复制链接</button>'+
+    '<div class="row" style="margin-top:8px;flex-wrap:wrap;gap:6px">'+
+      btn+
+      (auto?'':'<button class="btn ghost sm" onclick="apkCopyLink(\''+url+'\')">📋 复制链接</button>')+
       (same?'':'<button class="btn ghost sm" onclick="apkMark(\''+v.version+'\')">✓ 装好后点此标记</button>')+
     '</div>'+
-    '<div class="sub" style="margin:8px 0 0">下载完成后下拉通知栏点安装；首次需允许「安装未知应用」。若按钮没反应，点「复制链接」用浏览器打开。</div>';
+    guide;
+}
+function apkGo(url,ver){
+  if(!apkCanAuto()){ window.open(url,'_blank'); return; }
+  try{ window.Android.installApk(url); }catch(e){ toast('⚠️ 调用失败，请用浏览器下载'); window.open(url,'_blank'); }
 }
 function apkMark(ver){
   try{ localStorage.setItem('apkInstalled',ver); }catch(_){}
