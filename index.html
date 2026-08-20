@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.8.21.9-->
+<!--APP_VER:2026.8.21.10-->
 <style>
 :root{
   --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
@@ -5220,10 +5220,76 @@ async function syncNow(forcePull){
   persist();
   const st=$('#syncStatus'); if(st) st.textContent=syncStatusText();
 }
+/* ===== App 版本更新（APK 一键更新）===== */
+var APK_VER_URL=SYNC_BASE+'/version.json';
+var APK_DEFAULT_INSTALLED='v30'; /* 功能上线前最后发出去的 APK 版本 */
+function apkInstalled(){
+  try{ return localStorage.getItem('apkInstalled')||APK_DEFAULT_INSTALLED; }catch(_){ return APK_DEFAULT_INSTALLED; }
+}
+async function apkCheck(){
+  var box=document.getElementById('apkBox'); if(!box) return;
+  box.innerHTML='<div class="sub" style="margin:8px 0 0">⏳ 正在检查新版本…</div>';
+  try{
+    var r=await fetch(APK_VER_URL+'?t='+Date.now(),{cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    var v=await r.json();
+    if(!v||!v.version) throw new Error('版本信息不完整');
+    window.__apkLatest=v;
+    try{ localStorage.setItem('__apkChk',String(Date.now())); }catch(_){}
+    apkRender(v);
+  }catch(e){
+    box.innerHTML='<div class="sub" style="margin:8px 0 0">❌ 检查失败（'+e.message+'），需联网，稍后再试</div>';
+  }
+}
+function apkRender(v){
+  var box=document.getElementById('apkBox'); if(!box||!v) return;
+  var mine=apkInstalled();
+  var same=(mine===v.version);
+  var url=SYNC_BASE+'/'+(v.apk||'latest.apk');
+  var pill=document.getElementById('apkMinePill');
+  if(pill) pill.textContent='已装 '+mine;
+  box.innerHTML=
+    '<div class="row" style="margin-top:8px;align-items:center">'+
+      '<span class="pill">最新 '+v.version+'</span>'+
+      (same
+        ?'<span class="pill" style="background:#d8e8be;color:#4a6b3a">✓ 已是最新</span>'
+        :'<span class="pill" style="background:#f7e0d8;color:#b05a3e">🆕 有新版</span>')+
+      '<span class="muted" style="font-size:11px">'+(v.date||'')+'</span>'+
+    '</div>'+
+    '<div style="font-size:12.5px;margin-top:6px;line-height:1.7;color:var(--ink)">'+(v.changelog||[]).map(function(c){return '· '+c;}).join('<br>')+'</div>'+
+    '<div class="row" style="margin-top:8px">'+
+      '<a class="btn sm" style="text-decoration:none" href="'+url+'" target="_blank" rel="noopener">⬇️ 下载新 APK'+(v.size?'（'+v.size+'）':'')+'</a>'+
+      '<button class="btn ghost sm" onclick="apkCopyLink(\''+url+'\')">📋 复制链接</button>'+
+      (same?'':'<button class="btn ghost sm" onclick="apkMark(\''+v.version+'\')">✓ 装好后点此标记</button>')+
+    '</div>'+
+    '<div class="sub" style="margin:8px 0 0">下载完成后下拉通知栏点安装；首次需允许「安装未知应用」。若按钮没反应，点「复制链接」用浏览器打开。</div>';
+}
+function apkMark(ver){
+  try{ localStorage.setItem('apkInstalled',ver); }catch(_){}
+  toast('✓ 已标记 '+ver+' 为当前版本');
+  apkRender(window.__apkLatest);
+  var pill=document.getElementById('apkMinePill'); if(pill) pill.textContent='已装 '+ver;
+}
+function apkCopyLink(url){
+  try{
+    var i=document.createElement('input'); i.value=url;
+    document.body.appendChild(i); i.select(); i.setSelectionRange(0,99999);
+    document.execCommand('copy'); i.remove();
+    toast('✓ 链接已复制，粘贴到浏览器即可下载');
+  }catch(e){ toast(url); }
+}
 function renderCloud(main){
   const s=state.sync||{};
   const g=ghCfg();
   let html=`
+  <div class="panel">
+    <div class="spread"><h3 style="margin-top:0">📦 App 版本更新</h3><span class="pill" id="apkMinePill">${apkInstalled()?'已装 '+apkInstalled():'未记录'}</span></div>
+    <div class="row" style="margin-top:6px">
+      <button class="btn sm" onclick="apkCheck()">🔍 检查更新</button>
+      <span class="muted" style="font-size:11px">网页内容更新是全自动的；这里只更新 App 本体（新 APK）</span>
+    </div>
+    <div id="apkBox"></div>
+  </div>
   <div class="panel">
     <div class="spread"><h3 style="margin-top:0">🐙 GitHub 自动备份（推荐）</h3><span class="pill">${g.on?'已开启':'未开启'}</span></div>
     <div class="sub">数据存在<b>你自己的 GitHub 私有仓库</b>；照片仅保存在本机</div>
@@ -5253,6 +5319,11 @@ function renderCloud(main){
     </div>
   </div>`;
   main.innerHTML=html;
+  /* 进入云同步页自动检查一次 APK 更新（每天最多一次）*/
+  try{
+    var lastApkChk=+localStorage.getItem('__apkChk')||0;
+    if(Date.now()-lastApkChk>24*3600*1000) setTimeout(apkCheck,400);
+  }catch(_){}
 }
 async function cloudBackup(){
   let code=(state.sync&&state.sync.code)||'';
@@ -5757,7 +5828,7 @@ showModule('home');
     <div class="q">找不到「添加到主屏幕」？</div>
     <div class="a">OPPO/华为 一般在浏览器右上角 <code>⋮</code> 菜单里；也可在浏览器「分享」里找「添加到主屏幕」。</div>
     <div class="q">以后有更新怎么办？</div>
-    <div class="a">不用你操作——我改完重发同链接，你重开 App 自动变新版。</div>
+    <div class="a">网页功能更新全自动——你重开 App 就是新版；涉及 App 本体（拍照、权限等）时，去「☁️ 云同步 → 📦 App 版本更新」一键下载新 APK 安装。</div>
   </div>
 </div>
 <script>
