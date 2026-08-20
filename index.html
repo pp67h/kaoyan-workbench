@@ -12,16 +12,16 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.8.21.4-->
+<!--APP_VER:2026.8.21.5-->
 <style>
 :root{
-  --paper:#fbf3e2;
-  --paper2:#fff8ec;
-  --card:#fffdf8;
-  --ink:#3d3a36;
-  --ink-soft:#7a7468;
-  --line:#e9ddc6;
-  --shadow:0 6px 18px rgba(150,120,70,.14);
+  --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
+  --paper2:#FFEDC9;  /* 浅奶油黄 · 次级背景 */
+  --card:#FFF8E8;    /* 暖奶油白 · 卡片 */
+  --ink:#5a4a2e;     /* 暖深棕 · 文字 */
+  --ink-soft:#9a8a6a;/* 暖灰棕 · 辅助文字 */
+  --line:#F0DCA0;    /* 暖金边框 */
+  --shadow:0 6px 18px rgba(180,150,80,.12);
   /* 人民币配色：明亮暖调，与米黄背景融为一体 */
   --c-home:#e85d4a;   /* 100元红 · 明亮暖珊瑚 */
   --c-cal:#e8745a;    /* 日历 · 暖橙红 */
@@ -44,8 +44,8 @@ html,body{margin:0;padding:0}
 body{
   font-family:-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
   background:
-    radial-gradient(circle at 12% 8%, #fff6e0 0%, transparent 40%),
-    radial-gradient(circle at 88% 92%, #fdeccb 0%, transparent 45%),
+    radial-gradient(circle at 12% 8%, #FFFBE6 0%, transparent 40%),
+    radial-gradient(circle at 88% 92%, #FFE8B8 0%, transparent 45%),
     var(--paper);
   color:var(--ink);
   font-size:15px;line-height:1.55;
@@ -55,7 +55,7 @@ body{
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
 input,textarea,select{font-family:inherit;font-size:15px}
 ::-webkit-scrollbar{width:8px;height:8px}
-::-webkit-scrollbar-thumb{background:#d8c8a6;border-radius:8px}
+::-webkit-scrollbar-thumb{background:#E8D080;border-radius:8px}
 
 /* ===== 布局：三栏（平板优先） ===== */
 #app{display:flex;gap:14px;max-width:1320px;margin:0 auto;padding:14px}
@@ -182,7 +182,7 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 .task .tm{font-size:12px;color:var(--ink-soft)}
 .task.done{opacity:.62}
 .task.done .tt{text-decoration:line-through}
-.task.doing{background:#fff7e6}
+.task.doing{background:#FFF8DC}
 .task-photo{margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .task-photo .thumb{position:relative;width:56px;height:56px;border-radius:8px;overflow:hidden;border:1px solid var(--line);cursor:pointer}
 .task-photo .thumb img{width:100%;height:100%;object-fit:cover;display:block}
@@ -285,7 +285,7 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 .lng-list{display:flex;flex-direction:column;gap:12px}
 .lng{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--paper2)}
 .lng .orig{font-size:15px;font-weight:600;line-height:1.7;color:var(--ink)}
-.lng .tr{background:#fff5e6;border-radius:8px;padding:8px 10px;margin:8px 0;color:#7a5a2a;font-size:13.5px;line-height:1.7}
+.lng .tr{background:#FFF6D8;border-radius:8px;padding:8px 10px;margin:8px 0;color:#8a6a3a;font-size:13.5px;line-height:1.7}
 .lng .ana{font-size:13px;line-height:1.7;color:var(--ink-soft);background:var(--paper);border-radius:8px;padding:8px 10px}
 /* 外刊分析板块（主旨 / 逻辑结构 / 作者态度） */
 .analysis{margin-top:6px;display:flex;flex-direction:column;gap:12px}
@@ -311,7 +311,7 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 /* ===== 长难句 ===== */
 .sent{border:1px solid var(--line);border-radius:16px;padding:14px;margin:12px 0;background:var(--paper2)}
 .sent .orig{font-size:16px;font-weight:600;line-height:1.7}
-.sent .tr{background:#fff5e6;border-radius:10px;padding:9px 11px;margin:8px 0;color:#7a5a2a;font-size:14px}
+.sent .tr{background:#FFF6D8;border-radius:10px;padding:9px 11px;margin:8px 0;color:#8a6a3a;font-size:14px}
 .gtags{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
 .gtag{font-size:12px;background:var(--card);border:1px solid var(--line);border-radius:9px;padding:4px 8px}
 .gtag b{color:var(--c-sent)}
@@ -342,7 +342,7 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 .game-box{border:1px solid var(--line);border-radius:16px;padding:14px;margin:10px 0;background:var(--paper2)}
 .match-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .match-cell{padding:11px 32px 11px 10px;border-radius:12px;border:1.5px solid var(--line);background:var(--card);text-align:center;font-size:14px;position:relative;cursor:pointer}
-.match-cell.sel{border-color:var(--c-fun);background:#fff3e6}
+.match-cell.sel{border-color:var(--c-fun);background:#FFF3D6}
 .match-cell.ok{background:#e7f8ee;border-color:var(--c-task)}
 .match-cell.no{background:#fdeaea;border-color:var(--c-home)}
 .mc-word{display:inline-block;max-width:100%}
@@ -360,7 +360,7 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 .flip i{display:block;width:100%;height:100%;border-radius:12px;transform-style:preserve-3d;transition:.4s;
   backface-visibility:hidden;display:grid;place-items:center;text-align:center;font-size:12px;padding:4px;
   background:var(--paper);border:1.5px solid var(--line)}
-.flip.open i{background:#fff3e6;border-color:var(--c-fun)}
+.flip.open i{background:#FFF3D6;border-color:var(--c-fun)}
 .food-wheel{font-size:30px;text-align:center;padding:20px;min-height:120px;display:grid;place-items:center;
   border-radius:16px;background:linear-gradient(135deg,#fff,#fff3e6);border:1px solid var(--line);margin:10px 0}
 
@@ -403,8 +403,8 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 #hbMask{position:fixed;inset:0;z-index:90;background:rgba(20,15,5,.5);display:none;
   align-items:flex-end;justify-content:center}
 #hbMask.show{display:flex}
-#hbBox{background:#fffdf8;width:100%;max-width:580px;max-height:88vh;overflow:auto;
-  border-radius:18px 18px 0 0;padding:22px 20px 28px;color:#3a3226;font-size:14px;line-height:1.75;
+#hbBox{background:#FFF8E8;width:100%;max-width:580px;max-height:88vh;overflow:auto;
+  border-radius:18px 18px 0 0;padding:22px 20px 28px;color:#5a4a2e;font-size:14px;line-height:1.75;
   box-shadow:0 -6px 24px rgba(0,0,0,.18)}
 @media(min-width:1081px){#hbMask{align-items:center}#hbBox{border-radius:18px}}
 #hbBox h2{font-size:20px;margin:0 0 4px;color:#5a4708;display:flex;align-items:center;gap:8px}
@@ -413,9 +413,9 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 #hbBox .step{display:flex;gap:10px;margin:11px 0;align-items:flex-start}
 #hbBox .step .n{flex:0 0 24px;width:24px;height:24px;border-radius:50%;background:#ffd54f;
   color:#5a4708;display:grid;place-items:center;font-weight:700;font-size:13px}
-#hbBox code{background:#fbf3e2;padding:1px 6px;border-radius:6px;font-size:12.5px;color:#7a3b00}
-#hbBox .note{background:#fff8e1;border:1px solid #ffe082;border-radius:12px;padding:12px 14px;margin:12px 0;font-size:13px}
-#hbBox .warn{background:#fff3e0;border:1px solid #ffcc80;border-radius:12px;padding:12px 14px;margin:12px 0;font-size:13px}
+#hbBox code{background:#FFF3D6;padding:1px 6px;border-radius:6px;font-size:12.5px;color:#7a3b00}
+#hbBox .note{background:#FFFBE6;border:1px solid #ffe082;border-radius:12px;padding:12px 14px;margin:12px 0;font-size:13px}
+#hbBox .warn{background:#FFF0CC;border:1px solid #ffcc80;border-radius:12px;padding:12px 14px;margin:12px 0;font-size:13px}
 #hbBox .close{position:sticky;top:0;float:right;margin:-6px -4px 0 0;background:#f0e6d2;border:none;
   width:34px;height:34px;border-radius:50%;font-size:18px;color:#7a7468;cursor:pointer}
 #hbBox .q{font-weight:700;margin:12px 0 3px}
@@ -952,11 +952,11 @@ function renderHome(main){
   }).join('');
   main.innerHTML=`
   <style>.kd{display:flex;align-items:center;gap:10px;padding:11px 13px;border:1px solid var(--line);border-radius:14px;background:var(--paper2);}
-  .kd-ico{width:32px;height:32px;display:grid;place-items:center;background:#fff;border-radius:10px;font-size:17px;flex:0 0 32px;border:1px solid var(--line);}
+  .kd-ico{width:32px;height:32px;display:grid;place-items:center;background:#FFFDF5;border-radius:10px;font-size:17px;flex:0 0 32px;border:1px solid var(--line);}
   .kd-n{font-weight:600;font-size:14px}
   .kd-d{font-size:12px;color:var(--ink-soft);margin-top:2px}
   .kd.past{opacity:.5}
-  .kd.on{background:#fff5e6;border-color:var(--c-home);box-shadow:0 0 0 2px rgba(232,93,74,.12)}
+  .kd.on{background:#FFF6D8;border-color:var(--c-home);box-shadow:0 0 0 2px rgba(232,93,74,.12)}
   .kd.on .kd-ico{background:var(--c-home);color:#fff;border-color:var(--c-home)}
   .kd.big{background:linear-gradient(135deg,var(--c-home),#f07a5c);color:#fff;border-color:transparent}
   .kd.big .kd-ico{background:rgba(255,255,255,.25);color:#fff;border-color:rgba(255,255,255,.3)}
@@ -5665,7 +5665,7 @@ function setupPWA(){
   const png=APP_ICON_PNG;
   const icons=[{src:png,sizes:'512x512',type:'image/png'},{src:png,sizes:'192x192',type:'image/png'}];
   const manifest={name:'🫐 考研工作台',short_name:'考研工作台',start_url:'.',display:'standalone',
-    background_color:'#fbf3e2',theme_color:'#ffd54f',icons};
+    background_color:'#FFF3D6',theme_color:'#ffd54f',icons};
   const blob=new Blob([JSON.stringify(manifest)],{type:'application/json'});
   const link=document.createElement('link'); link.rel='manifest'; link.href=URL.createObjectURL(blob); document.head.appendChild(link);
   const touch=document.createElement('link'); touch.rel='apple-touch-icon'; touch.href=png; document.head.appendChild(touch);
