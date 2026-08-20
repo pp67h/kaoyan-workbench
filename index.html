@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.8.8.7-->
+<!--APP_VER:2026.8.13.2-->
 <style>
 :root{
   --paper:#fbf3e2;
@@ -189,6 +189,12 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 .task-photo .thumb .del{position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;border:none;font-size:10px;line-height:16px;text-align:center}
 .task-photo .up-btn{font-size:12px}
 .task .need-photo{color:var(--c-home);font-size:11px;margin-top:4px}
+.upload-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.upload-wrap{position:relative;display:inline-block;overflow:hidden;vertical-align:middle}
+.upload-wrap input[type=file]{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:0;border:none;padding:0;margin:0;z-index:10}
+.upload-wrap>.btn{display:inline-block}
+.upload-icon{width:34px;height:28px;border-radius:10px;border:1.5px solid var(--line);background:var(--paper2);display:inline-grid;place-items:center;font-size:15px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.5);cursor:pointer}
+.upload-icon:active{transform:translateY(1px)}
 .states{display:flex;gap:4px;flex:0 0 auto}
 .state-dot{width:26px;height:26px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-size:12px}
 .state-dot.on-todo{background:#eee}
@@ -206,8 +212,11 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 .dog-wrap{text-align:center;padding:6px}
 .dog{display:block;width:100%;transition:transform .18s ease}
 .pangpang-card{position:relative;width:158px;height:158px;margin:0 auto;border-radius:24px;overflow:hidden;background:linear-gradient(135deg,#fff7df,#ffe7b0);box-shadow:0 8px 22px rgba(110,75,25,.16);border:1px solid rgba(255,213,79,.55)}
-.pangpang-card video{width:100%;height:100%;object-fit:cover;display:block}
-.pangpang-card:after{content:'';position:absolute;inset:0;border-radius:24px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.55);pointer-events:none}
+.pangpang-card video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.pangpang-card video.pp-idle{z-index:1}
+.pangpang-card video.pp-oneshot{z-index:2;opacity:0;transition:opacity .18s ease-out}
+.pangpang-card video.pp-oneshot.show{opacity:1}
+.pangpang-card:after{content:'';position:absolute;inset:0;border-radius:24px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.55);pointer-events:none;z-index:3}
 .pangpang-badge{position:absolute;left:8px;bottom:8px;background:rgba(255,253,248,.9);border:1px solid var(--line);border-radius:999px;padding:3px 8px;font-size:11px;color:#6b5a35;backdrop-filter:blur(4px)}
 .pangpang-spark{position:absolute;right:10px;top:10px;font-size:18px;animation:pangSpark 1.8s ease-in-out infinite}
 @keyframes pangSpark{0%,100%{transform:translateY(0) scale(.95);opacity:.72}50%{transform:translateY(-4px) scale(1.08);opacity:1}}
@@ -374,7 +383,8 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 .sched .dotc{width:9px;height:9px;border-radius:50%;flex:0 0 9px}
 
 
-/* ===== 拍照打卡 ===== */
+/* ===== 任务照片 ===== */
+.ck-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px}
 .ck-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
 .ck-photo{position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--line);aspect-ratio:1/1;background:var(--paper2);cursor:pointer}
 .ck-photo img{width:100%;height:100%;object-fit:cover;display:block}
@@ -557,7 +567,47 @@ const MESSAGES = [
 /* ---------- 存储 ---------- */
 const LS = 'kyb_';
 function load(k,def){ try{const v=localStorage.getItem(LS+k);return v?JSON.parse(v):def;}catch(e){return def;} }
-function save(k,v){ try{localStorage.setItem(LS+k,JSON.stringify(v));}catch(e){} }
+function save(k,v){
+  if(k==='state'){ saveState(v); return; }
+  try{ localStorage.setItem(LS+k,JSON.stringify(v)); }
+  catch(e){
+    try{ toast('本机存储空间不足，照片可能无法继续保存；请先云备份或删除旧照片'); }catch(_){}
+  }
+}
+// 主状态含照片 base64 会撑爆 localStorage，导致整体保存失败、任务/进度丢数据。
+// 这里把照片从主状态剥离单独存：照片存不下时只丢照片，任务/进度永远能保存。
+function saveState(v){
+  if(!v || typeof v!=='object'){ try{ localStorage.setItem(LS+'state', JSON.stringify(v)); }catch(_){} return; }
+  const photos = (v.checkins && typeof v.checkins==='object') ? v.checkins : {};
+  const hasPhotos = Object.keys(photos).length>0;
+  const light={}; for(const k in v){ if(k!=='checkins') light[k]=v[k]; }
+  try{ localStorage.setItem(LS+'state', JSON.stringify(light)); }
+  catch(e){ try{ toast('本机存储几乎已满，最新改动可能未保存，请尽快导出备份'); }catch(_){} }
+  // 冗余镜像：主键异常时可用于兜底恢复
+  try{ localStorage.setItem(LS+'state2', JSON.stringify(light)); }catch(_){}
+  if(hasPhotos){
+    try{ localStorage.setItem(LS+'ph', JSON.stringify(photos)); }
+    catch(e){ try{ toast('照片过多，部分照片未能保存；任务及其他进度数据不受影响'); }catch(_){} }
+  } else {
+    // 照片清空后同步清除 ph 键，避免旧照片重启后复活
+    try{ localStorage.removeItem(LS+'ph'); }catch(_){}
+  }
+}
+// 恢复/导入前自动留一份本地快照，误操作可直接回退（不含照片，保证快照可靠写入）
+function snap(){
+  try{
+    const light={}; for(const k in state){ if(k!=='checkins') light[k]=state[k]; }
+    localStorage.setItem(LS+'state_snap', JSON.stringify(light));
+  }catch(_){}
+}
+function snapRestore(){
+  const s=load('state_snap',null);
+  if(!s || typeof s!=='object'){ toast('暂无本地快照可恢复'); return; }
+  state=Object.assign({}, state, s); persist();
+  $('#side').innerHTML=renderSide();
+  const main=document.querySelector('#main'); if(main&&current) showModule(current);
+  toast('✅ 已恢复到最近一次快照');
+}
 
 /* ---------- 全局状态 ---------- */
 const DEFAULT_STATE = {
@@ -569,7 +619,7 @@ const DEFAULT_STATE = {
   calStat:{},        // {date:{plan,done}}
   dog:{fed:0,date:''},
   know:Object.assign({notes:'',list:[],mode:'auto',pick:{}}, (function(){ const s=['发展心理学','心理学导论','心理与教育研究方法']; const mk={}; [1,2,3,4].forEach(r=>{ mk[r]={}; s.forEach(x=>mk[r][x]={cur:0,total:0}); }); return {round:1,pages:mk}; })()),
-  pol:{q1000:0,x8:0,x4:0,mastered:[],shizheng:[],shizhengWeek:''},
+  pol:{q1000:0,q1000y2:0,q1000Total:30,x8:0,x4:0,mastered:[],shizheng:[],shizhengWeek:''},
   eng:{'完形':{y1:0,y2:0,total:21},'阅读':{y1:20,y2:0,total:84},'新题型':{y1:0,y2:0,total:21},'作文':{y1:0,y2:0,total:21}},
   words:{newN:20,revN:60,round:1,list:[
     {en:'abandon',ph:'/əˈbændən/',cn:'v.放弃；抛弃'},
@@ -584,6 +634,7 @@ const DEFAULT_STATE = {
     {en:'accelerate',ph:'/əkˈseləreɪt/',cn:'v.加速；促进'},
   ],cur:0},
   mood:[],
+  monthDeleted:[],    // 月计划删除墓碑（同步用）
   examDate:'2026-12-21',
   keyDates:[],            // 用户自定义关键节点（数组为空时使用默认 8 条）
   sched:[],               // 用户自定义作息（数组为空时使用默认 SCHEDULE）
@@ -593,25 +644,99 @@ const DEFAULT_STATE = {
   vocab:{total:6023,y1:4289,y2:0,y3:0}, // 单词进度（一刷/二刷/三刷）
   progressPlan:[],         // 当前进度总览（3 条），为空用默认
   taskDate:'',             // 任务归属日期（默认今天，可在日历选择）
-  checkins:{},             // {date:[{src,cap}]} 每日拍照打卡
+  checkins:{},             // {date:[{src,cap}]} 兼容旧照片数据
   mySent:[],               // 用户自己添加的长难句及分析结果
   sync:{code:'',on:false,lastAt:0,status:'',err:'',firstSync:false}, // 云同步配置（本机保留，不被远端覆盖）
+  gh:{token:'',owner:'',repo:'',path:'data.json',on:false,lastAt:0,msg:''}, // GitHub 备份配置（本机保留）
 };
 let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
 // 合并已存
 (function merge(){
-  const saved = load('state',null);
+  let saved = load('state',null);
+  // 主键解析失败/为空时，用冗余镜像兜底，避免一次损坏导致全部丢失
+  if(!saved || typeof saved!=='object') saved = load('state2',null);
   if(saved) state = Object.assign({},state,saved);
+  // 照片已按新方案拆分存放时，重新合并回主状态
+  const ph = load('ph',null);
+  if(ph && typeof ph==='object' && Object.keys(ph).length){
+    state.checkins = (state.checkins && Object.keys(state.checkins).length) ? Object.assign({}, state.checkins, ph) : ph;
+  }
   // 补全专业课背诵页进度（兼容旧数据）
   const KS=['发展心理学','心理学导论','心理与教育研究方法'];
   if(!state.know.round) state.know.round=1;
   if(!state.know.pages) state.know.pages={};
   [1,2,3,4].forEach(r=>{ if(!state.know.pages[r]) state.know.pages[r]={}; KS.forEach(x=>{ if(!state.know.pages[r][x]) state.know.pages[r][x]={cur:0,total:0}; }); });
+  // 1000题迁移：从「按题数」改为「按节数」
+  if(state.pol.q1000Total===undefined) state.pol.q1000Total=30;
+  if(state.pol.q1000y2===undefined) state.pol.q1000y2=0;
+  if(state.pol.q1000>state.pol.q1000Total) state.pol.q1000=state.pol.q1000Total;
+  // 月计划迁移：给旧记录补 _t 时间戳
+  if(!state.monthDeleted) state.monthDeleted=[];
+  if(state.monthPlan&&state.monthPlan.length){
+    const now=Date.now();
+    state.monthPlan.forEach((it,i)=>{ if(!it._t) it._t=now-i; });
+  }
   // 每日学习时间（计时器）
   if(!state.studyToday||typeof state.studyToday!=='object') state.studyToday={date:'',英语:0,政治:0,专业课:0,生活:0};
   if(!state.studyLog||typeof state.studyLog!=='object') state.studyLog={};
 })();
-function persist(){ if(state&&typeof state==='object') state._mtime=Date.now(); save('state',state); }
+function persist(){ if(state&&typeof state==='object') state._mtime=Date.now(); save('state',state); ghAutoSync(); }
+
+/* ---------- 直接拍照（通过 Android JavascriptInterface）---------- */
+function doCamera(callbackId){
+  if(window.Android && typeof window.Android.launchCamera==='function'){
+    window.Android.launchCamera(callbackId);
+  }else{
+    toast('当前环境不支持直接拍照，请用相册上传');
+  }
+}
+function doGallery(callbackId){
+  if(window.Android && typeof window.Android.launchGallery==='function'){
+    window.Android.launchGallery(callbackId);
+  }else{
+    toast('当前环境不支持直接打开图库');
+  }
+}
+window._onCameraPhoto=function(callbackId,base64){
+  if(!base64){ toast('相机没有返回照片，请确认已允许相机权限后重试'); return; }
+  var dataUrl='data:image/jpeg;base64,'+base64;
+  if(callbackId.indexOf('task_')===0){
+    var taskId=callbackId.substring(5);
+    var d=taskViewDate; var t=state.tasks[d]&&state.tasks[d].find(x=>x.id===taskId);
+    if(t){ t.photo=dataUrl; persist(); renderTask($('#main')); $('#side').innerHTML=renderSide(); toast('✓ 已拍照上传'); }
+  }else if(callbackId==='checkin'){
+    var cd=todayStr();
+    if(!state.checkins) state.checkins={};
+    if(!state.checkins[cd]) state.checkins[cd]=[];
+    if(state.checkins[cd].length>=8){ toast('今天已满 8 张'); return; }
+    state.checkins[cd].push({src:dataUrl,cap:'任务照片'});
+    persist(); renderCkGallery(); toast('✓ 打卡成功');
+  }else if(callbackId==='wordocr'){
+    var b64f=base64ToFileObj(base64);
+    wordOCRFile(b64f);
+  }else if(callbackId==='mysent'){
+    var b64f2=base64ToFileObj(base64);
+    ocrMySentFile(b64f2);
+  }
+};
+window._onGalleryPhoto=function(callbackId,base64){
+  if(!base64){ toast('没有选到照片，请重试'); return; }
+  var dataUrl='data:image/jpeg;base64,'+base64;
+  if(callbackId.indexOf('task_')===0){
+    var taskId=callbackId.substring(5);
+    var d=taskViewDate; var t=state.tasks[d]&&state.tasks[d].find(x=>x.id===taskId);
+    if(t){ t.photo=dataUrl; persist(); renderTask($('#main')); $('#side').innerHTML=renderSide(); toast('✓ 已从图库上传'); }
+  }else if(callbackId==='wordocr'){
+    wordOCRFile(base64ToFileObj(base64));
+  }else if(callbackId==='mysent'){
+    ocrMySentFile(base64ToFileObj(base64));
+  }
+};
+function base64ToFileObj(base64){
+  var bin=atob(base64); var arr=new Uint8Array(bin.length);
+  for(var i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+  return new File([arr],'camera_photo.jpg',{type:'image/jpeg'});
+}
 
 /* ---------- 工具 ---------- */
 const $ = s=>document.querySelector(s);
@@ -780,6 +905,19 @@ function showModule(id){
   $('#side').innerHTML=renderSide();
   window.scrollTo(0,0);
 }
+// 从日历"点日期"直接跳到那天的「每日打卡」页面
+function gotoTaskAt(ds){
+  taskViewDate=ds||todayStr();
+  current='task';
+  markActive('task');
+  const m=MODULES.find(x=>x.id==='task');
+  setAccent(m.key);
+  const main=$('#main');
+  main.innerHTML='';
+  renderTask(main);
+  $('#side').innerHTML=renderSide();
+  window.scrollTo(0,0);
+}
 
 /* ---------- 首页：倒计时 ---------- */
 const KEY_DATES = [
@@ -913,17 +1051,33 @@ function renderCal(main){
     <h2 style="margin:0">📅 2026年8月–12月 规划</h2>
     <button class="btn ghost sm" onclick="calJumpToday()">今天</button>
     <button class="btn ghost sm" onclick="shiftMonth(1)">下月 ›</button></div>
-    <div class="sub">点击日期写日记 / 标记里程碑；周末自动统计完成率</div>
+    <div class="sub">点日期进入当天「每日打卡」；长按日期写日记 / 标记里程碑</div>
     <div class="cal-grid" id="calGrid"></div>
+    <div class="row" style="margin-top:8px;align-items:center;gap:4px;flex-wrap:wrap">
+      <span class="muted" style="font-size:11px">学习时长：</span>
+      <span style="width:14px;height:14px;border-radius:4px;background:var(--paper2);border:1px solid var(--line)"></span>
+      <span class="muted" style="font-size:11px">少</span>
+      <span style="width:14px;height:14px;border-radius:4px;background:rgba(47,170,106,.28)"></span>
+      <span style="width:14px;height:14px;border-radius:4px;background:rgba(47,170,106,.62)"></span>
+      <span style="width:14px;height:14px;border-radius:4px;background:rgba(47,170,106,.95)"></span>
+      <span class="muted" style="font-size:11px">多（≥7小时最深）</span>
+    </div>
     <div style="margin-top:14px;border-top:1px dashed var(--line);padding-top:12px">
       <div class="spread"><h3 style="margin:0">🗓️ 月计划（${calMonth}月）</h3><span class="muted" style="font-size:12px">和周计划在一起 · 不另开卡片</span></div>
       <div class="sub" style="margin-top:4px">本月要拿下的几个大目标（与周计划互补，逐月填写）</div>
       <div id="monthList"></div>
-      <div class="row" style="margin-top:8px;gap:8px">
-        <input type="text" id="mPlanIn" placeholder="任务名，如：发展心理学一轮过完" style="flex:2">
+      <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">
+        <input type="text" id="mPlanIn" placeholder="任务名，如：发展心理学一轮过完" style="flex:2;min-width:140px">
         <input type="number" id="mPlanTotal" min="0" placeholder="总量" style="width:70px" title="该任务的总量">
         <input type="text" id="mPlanUnit" placeholder="单位" style="width:60px" title="单位，如 页 / 章 / 个 / 篇">
         <button class="btn sm" onclick="monthAdd()">添加</button>
+      </div>
+      <div class="row" style="margin-top:6px;gap:8px;align-items:center">
+        <span class="muted" style="font-size:12px;white-space:nowrap">🔗 关联进度：</span>
+        <select id="mPlanLink" style="flex:1;min-width:140px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;font-size:13px">
+          <option value="">不关联（独立任务）</option>
+          ${progressLinkOptions().map(o=>`<option value="${o.link}">${o.label}（${o.cur}/${o.total}）</option>`).join('')}
+        </select>
       </div>
     </div>
   </div>
@@ -1038,6 +1192,7 @@ function renderMonthList(){
     const cur=Math.max(0,Math.min(tot,Number(it.cur)||0));
     const pct=tot?Math.round(cur/tot*100):0;
     const unit=it.unit||'页';
+    const linkBadge=it.link?'<span class="chip" style="font-size:10px;background:var(--c-prog);color:#fff;padding:1px 6px;border-radius:8px">🔗 已关联进度</span>':'';
     const progUi=`
       <div class="mp-row" style="margin-top:6px"><span class="muted">进度 ${cur} / ${tot} ${unit}</span><b>${pct}%</b></div>
       <div class="bar"><i style="width:${pct}%"></i></div>
@@ -1048,10 +1203,13 @@ function renderMonthList(){
         <input type="number" min="0" value="${tot}" onchange="monthSetTotalVal(${i},this.value)" style="width:56px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">
         <input type="text" value="${escAttr(unit)}" onchange="monthSetUnit(${i},this.value)" title="单位，如 页/章/个/篇" style="width:52px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;font-size:12px">
         <button class="btn ghost xs" onclick="monthStep(${i},1)">＋</button>
+        ${it.link?'<span class="muted" style="font-size:11px">改这里→进度概况同步更新</span>':''}
       </div>`;
     return `<div class="mp-task">
       <div class="row" style="align-items:center">
-        <label style="flex:1"><input type="checkbox" ${it.done?'checked':''} onchange="monthToggle(${i})"> ${it.done?'<s>':''}${escHtml(it.t)}${it.done?'</s>':''}</label>
+        <label style="flex:1"><input type="checkbox" ${it.done?'checked':''} onchange="monthToggle(${i})"> ${it.done?'<s>':''}${escHtml(it.t)}${it.done?'</s>':''} ${linkBadge}</label>
+        <button class="btn ghost xs" onclick="monthMove(${i},-1)" title="上移" ${i===0?'disabled style="opacity:.3"':''}>↑</button>
+        <button class="btn ghost xs" onclick="monthMove(${i},1)" title="下移" ${i===list.length-1?'disabled style="opacity:.3"':''}>↓</button>
         <button class="btn ghost sm" onclick="monthDel(${i})">删</button>
       </div>
       ${progUi}
@@ -1066,6 +1224,8 @@ function monthStep(i,d){
   const tot=Number(it.total)||0;
   it.cur=Math.max(0,Math.min(tot,(Number(it.cur)||0)+d));
   if(tot>0 && it.cur>=tot) it.done=true;
+  it._t=Date.now();
+  if(it.link) syncProgressFromMonthPlan(it);
   persist(); renderMonthList();
 }
 function monthSetCur(i,v){
@@ -1076,6 +1236,8 @@ function monthSetCur(i,v){
   const tot=Number(it.total)||0;
   it.cur=Math.max(0,Math.min(tot, parseInt(v)||0));
   if(tot>0 && it.cur>=tot) it.done=true;
+  it._t=Date.now();
+  if(it.link) syncProgressFromMonthPlan(it);
   persist(); renderMonthList();
 }
 function monthSetTotalVal(i,v){
@@ -1085,6 +1247,8 @@ function monthSetTotalVal(i,v){
   const it=arr[i]; if(!it) return;
   it.total=Math.max(0,parseInt(v)||0);
   if(it.total>0 && (Number(it.cur)||0)>=it.total) it.done=true;
+  it._t=Date.now();
+  if(it.link) syncProgressFromMonthPlan(it);
   persist(); renderMonthList();
 }
 function monthSetUnit(i,v){
@@ -1093,26 +1257,41 @@ function monthSetUnit(i,v){
   const arr=state.monthPlan.filter(x=>x.month===mk);
   const it=arr[i]; if(!it) return;
   it.unit=(v||'').trim()||'页';
+  it._t=Date.now();
   persist(); renderMonthList();
 }
 
 /* ---------- 📊 进度概览（独立模块，可编辑，随云同步） ---------- */
 function progPct(cur,tot){ return tot?Math.round(Math.max(0,Math.min(cur,tot))/tot*100):0; }
-function progStepEng(d){ const o=state.eng['阅读']; o.y1=Math.max(0,Math.min(o.total,o.y1+d)); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-function progApplyEng(){ const o=state.eng['阅读']; o.total=Math.max(1,parseInt($('#progEngTot').value)||0); o.y1=Math.max(0,Math.min(o.total,parseInt($('#progEngCur').value)||0)); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-function progStepPol(d){ state.pol.q1000=Math.max(0,Math.min(1000,state.pol.q1000+d)); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-function progApplyPol(){ state.pol.q1000=Math.max(0,Math.min(1000,parseInt($('#progPol').value)||0)); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-function progStepVocab(d){ const v=state.vocab; v.y1=Math.max(0,Math.min(v.total,v.y1+d)); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-function progApplyVocab(){ const v=state.vocab; v.total=Math.max(1,parseInt($('#progVocTot').value)||0); v.y1=Math.max(0,Math.min(v.total,parseInt($('#progVocCur').value)||0)); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
+function syncMonthPlanAfterProgChange(){
+  if(!state.monthPlan) return;
+  let changed=false; const now=Date.now();
+  state.monthPlan.forEach(it=>{
+    if(it.link){
+      const v=getProgressByLink(it.link);
+      if(v && v.cur!==it.cur){ it.cur=v.cur; changed=true; it._t=now; }
+      if(v && v.total && v.total!==it.total){ it.total=v.total; changed=true; it._t=now; }
+      if(it.total>0&&it.cur>=it.total) it.done=true;
+    }
+  });
+  return changed;
+}
+function progStepEng(d){ const o=state.eng['阅读']; o.y1=Math.max(0,Math.min(o.total,o.y1+d)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
+function progApplyEng(){ const o=state.eng['阅读']; o.total=Math.max(1,parseInt($('#progEngTot').value)||0); o.y1=Math.max(0,Math.min(o.total,parseInt($('#progEngCur').value)||0)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
+function progStepPol(d){ state.pol.q1000=Math.max(0,Math.min(state.pol.q1000Total||30,state.pol.q1000+d)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
+function progApplyPol(){ state.pol.q1000=Math.max(0,Math.min(state.pol.q1000Total||30,parseInt($('#progPol').value)||0)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
+function progStepVocab(d){ const v=state.vocab; v.y1=Math.max(0,Math.min(v.total,v.y1+d)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
+function progApplyVocab(){ const v=state.vocab; v.total=Math.max(1,parseInt($('#progVocTot').value)||0); v.y1=Math.max(0,Math.min(v.total,parseInt($('#progVocCur').value)||0)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
 /* 进度概览：英语四卡（一刷/二刷） */
-function progEngSet(card,key,val){ const o=state.eng[card]; if(!o)return; o[key]=Math.max(0,Math.min(o.total,parseInt(val)||0)); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-function progEngTot(card,val){ const o=state.eng[card]; if(!o)return; o.total=Math.max(1,parseInt(val)||0); o.y1=Math.min(o.y1,o.total); o.y2=Math.min(o.y2,o.total); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
+function progEngSet(card,key,val){ const o=state.eng[card]; if(!o)return; o[key]=Math.max(0,Math.min(o.total,parseInt(val)||0)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
+function progEngTot(card,val){ const o=state.eng[card]; if(!o)return; o.total=Math.max(1,parseInt(val)||0); o.y1=Math.min(o.y1,o.total); o.y2=Math.min(o.y2,o.total); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
 /* 进度概览：政治 1000题/肖八/肖四 */
-function progPolSet(k,val){ const max=k==='q1000'?1000:k==='x8'?8:4; state.pol[k]=Math.max(0,Math.min(max,parseInt(val)||0)); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-function progPolStep(k,n){ const max=k==='q1000'?1000:k==='x8'?8:4; state.pol[k]=Math.max(0,Math.min(max,state.pol[k]+n)); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
+function progPolSet(k,val){ const max=(k==='q1000'||k==='q1000y2')?(state.pol.q1000Total||30):k==='x8'?8:4; state.pol[k]=Math.max(0,Math.min(max,parseInt(val)||0)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
+function progPolStep(k,n){ const max=(k==='q1000'||k==='q1000y2')?(state.pol.q1000Total||30):k==='x8'?8:4; state.pol[k]=Math.max(0,Math.min(max,state.pol[k]+n)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
+function progPolTot(val){ state.pol.q1000Total=Math.max(1,parseInt(val)||30); state.pol.q1000=Math.min(state.pol.q1000,state.pol.q1000Total); state.pol.q1000y2=Math.min(state.pol.q1000y2||0,state.pol.q1000Total); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
 /* 进度概览：专业课（心理）页进度 */
-function progKnowSet(subj,val){ const d=state.know.pages[state.know.round][subj]; const mx=d.total>0?d.total:Infinity; d.cur=Math.max(0,Math.min(mx,parseInt(val)||0)); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-function progKnowTot(subj,val){ const d=state.know.pages[state.know.round][subj]; d.total=Math.max(0,parseInt(val)||0); d.cur=Math.min(d.cur,d.total); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
+function progKnowSet(subj,val){ const d=state.know.pages[state.know.round][subj]; const mx=d.total>0?d.total:Infinity; d.cur=Math.max(0,Math.min(mx,parseInt(val)||0)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
+function progKnowTot(subj,val){ const d=state.know.pages[state.know.round][subj]; d.total=Math.max(0,parseInt(val)||0); d.cur=Math.min(d.cur,d.total); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
 function renderProgress(main){
   const pol=state.pol; const v=state.vocab; const e=state.eng;
   const engCards=['完形','阅读','新题型','作文'];
@@ -1155,15 +1334,24 @@ function renderProgress(main){
     <div class="prog-sec">🇬🇧 英语（一刷 / 二刷）</div>
     ${engRows}
 
-    <div class="prog-sec">🇨🇳 政治（1000 题 / 肖八 / 肖四）</div>
-    ${stat('1000 题', pol.q1000, 1000)}
+    <div class="prog-sec">🇨🇳 政治（1000题按节 一刷/二刷 / 肖八 / 肖四）</div>
+    <div class="prog-row">
+      <div class="spread"><b>🇨🇳 1000题</b><span class="muted">一刷 ${pol.q1000}/${pol.q1000Total||30} · 二刷 ${pol.q1000y2||0}/${pol.q1000Total||30}</span></div>
+      <div class="bar"><i style="width:${progPct(pol.q1000,pol.q1000Total||30)}%"></i></div>
+      <div class="bar" style="margin-top:4px;--accent:var(--c-prog)"><i style="width:${progPct(pol.q1000y2||0,pol.q1000Total||30)}%"></i></div>
+      <div class="row" style="margin-top:6px;gap:6px;align-items:center;flex-wrap:wrap">
+        <span class="muted" style="font-size:12px">一刷</span>
+        <input type="number" min="0" value="${pol.q1000}" onchange="progPolSet('q1000',this.value)" style="width:52px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">
+        <span class="muted" style="font-size:12px">二刷</span>
+        <input type="number" min="0" value="${pol.q1000y2||0}" onchange="progPolSet('q1000y2',this.value)" style="width:52px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">
+        <span class="muted" style="font-size:12px">/ 总</span>
+        <input type="number" min="1" value="${pol.q1000Total||30}" onchange="progPolTot(this.value)" style="width:52px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">
+        <span class="muted" style="font-size:12px">节</span>
+      </div>
+    </div>
     ${stat('肖八', pol.x8||0, 8)}
     ${stat('肖四', pol.x4||0, 4)}
     <div class="row" style="margin-top:6px;gap:6px;flex-wrap:wrap;align-items:center">
-      <span class="muted" style="font-size:12px">1000题</span>
-      <input type="number" min="0" max="1000" value="${pol.q1000}" onchange="progPolSet('q1000',this.value)" style="width:60px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">
-      <button class="btn ghost xs" onclick="progPolStep('q1000',-10)">－10</button>
-      <button class="btn ghost xs" onclick="progPolStep('q1000',10)">＋10</button>
       <span class="muted" style="font-size:12px">肖八</span>
       <input type="number" min="0" max="8" value="${pol.x8||0}" onchange="progPolSet('x8',this.value)" style="width:50px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">
       <button class="btn ghost xs" onclick="progPolStep('x8',1)">＋</button>
@@ -1180,14 +1368,22 @@ function renderProgress(main){
     <div class="spread"><h3 style="margin:0">🗓️ 月计划进度（按单位统计）</h3><span class="muted" style="font-size:12px">${calMonth}月</span></div>
     <div class="sub" style="margin-top:4px">每条任务可设单位（页/章/个/篇…）与总量，随时记录完成量</div>
     <div id="monthList"></div>
-    <div class="row" style="margin-top:8px;gap:8px">
-      <input type="text" id="mPlanIn" placeholder="任务名，如：发展心理学一轮过完" style="flex:2">
+    <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">
+      <input type="text" id="mPlanIn" placeholder="任务名，如：发展心理学一轮过完" style="flex:2;min-width:140px">
       <input type="number" id="mPlanTotal" min="0" placeholder="总量" style="width:70px" title="该任务的总量">
       <input type="text" id="mPlanUnit" placeholder="单位" style="width:60px" title="单位，如 页 / 章 / 个 / 篇">
       <button class="btn sm" onclick="monthAdd()">添加</button>
     </div>
+    <div class="row" style="margin-top:6px;gap:8px;align-items:center">
+      <span class="muted" style="font-size:12px;white-space:nowrap">🔗 关联进度：</span>
+      <select id="mPlanLink" style="flex:1;min-width:140px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;font-size:13px">
+        <option value="">不关联（独立任务）</option>
+        ${progressLinkOptions().map(o=>`<option value="${o.link}">${o.label}（${o.cur}/${o.total}）</option>`).join('')}
+      </select>
+    </div>
   </div>`;
   main.innerHTML=html;
+  try{ syncMonthPlanFromProgress(); }catch(e){}
   if(typeof renderMonthList==='function') renderMonthList();
 }
 function monthAdd(){
@@ -1196,23 +1392,125 @@ function monthAdd(){
   const mk=String(2026)+'-'+String(calMonth).padStart(2,'0');
   const tot=Math.max(0, parseInt($('#mPlanTotal')?$('#mPlanTotal').value:0)||0);
   const unit=($('#mPlanUnit')?($('#mPlanUnit').value.trim()):'')||'页';
-  state.monthPlan.push({month:mk,t:v,total:tot,cur:0,done:false,unit}); persist();
-  $('#mPlanIn').value=''; if($('#mPlanTotal'))$('#mPlanTotal').value=''; if($('#mPlanUnit'))$('#mPlanUnit').value='';
+  const linkEl=$('#mPlanLink'); const link=linkEl?linkEl.value:'';
+  const item={month:mk,t:v,total:tot,cur:0,done:false,unit,_t:Date.now()};
+  if(link){ item.link=link; const pv=getProgressByLink(link); if(pv){ item.cur=pv.cur; if(!tot&&pv.total) item.total=pv.total; } }
+  state.monthPlan.push(item);
+  persist();
+  $('#mPlanIn').value=''; if($('#mPlanTotal'))$('#mPlanTotal').value=''; if($('#mPlanUnit'))$('#mPlanUnit').value=''; if(linkEl) linkEl.value='';
   renderMonthList();
 }
 function monthToggle(i){
   if(!state.monthPlan) return;
   const mk=String(2026)+'-'+String(calMonth).padStart(2,'0');
   const arr=state.monthPlan.filter(x=>x.month===mk);
-  const it=arr[i]; if(it){ it.done=!it.done; persist(); renderMonthList(); }
+  const it=arr[i]; if(it){ it.done=!it.done; it._t=Date.now(); persist(); renderMonthList(); }
 }
 function monthDel(i){
   if(!state.monthPlan) return;
   const mk=String(2026)+'-'+String(calMonth).padStart(2,'0');
   const arr=state.monthPlan.filter(x=>x.month===mk);
-  const it=arr[i]; if(it){ state.monthPlan=state.monthPlan.filter(x=>x!==it); persist(); renderMonthList(); }
+  const it=arr[i]; if(it){
+    const key=(it.month||'')+'|'+(it.t||'').trim().toLowerCase();
+    if(!state.monthDeleted) state.monthDeleted=[];
+    state.monthDeleted.push({key,_t:Date.now()});
+    state.monthPlan=state.monthPlan.filter(x=>x!==it); persist(); renderMonthList();
+  }
+}
+function monthMove(i,dir){
+  if(!state.monthPlan) return;
+  const mk=String(2026)+'-'+String(calMonth).padStart(2,'0');
+  const arr=state.monthPlan.filter(x=>x.month===mk);
+  const j=i+dir;
+  if(i<0||j<0||i>=arr.length||j>=arr.length) return;
+  const itA=arr[i], itB=arr[j];
+  const idxA=state.monthPlan.indexOf(itA);
+  const idxB=state.monthPlan.indexOf(itB);
+  if(idxA<0||idxB<0) return;
+  [state.monthPlan[idxA],state.monthPlan[idxB]]=[state.monthPlan[idxB],state.monthPlan[idxA]];
+  itA._t=Date.now(); itB._t=Date.now();
+  persist(); renderMonthList();
+}
+/* ---------- 月计划 ↔ 进度概况 双向联动 ---------- */
+function progressLinkOptions(){
+  const opts=[];
+  const engCards=['完形','阅读','新题型','作文'];
+  engCards.forEach(c=>{
+    const o=state.eng[c]||{y1:0,y2:0,total:0};
+    opts.push({link:'eng|'+c+'|y1',label:'英语·'+c+' 一刷',cur:o.y1,total:o.total});
+    opts.push({link:'eng|'+c+'|y2',label:'英语·'+c+' 二刷',cur:o.y2,total:o.total});
+  });
+  opts.push({link:'pol|q1000',label:'政治·1000题 一刷',cur:state.pol.q1000,total:state.pol.q1000Total||30});
+  opts.push({link:'pol|q1000y2',label:'政治·1000题 二刷',cur:state.pol.q1000y2||0,total:state.pol.q1000Total||30});
+  opts.push({link:'pol|x8',label:'政治·肖八',cur:state.pol.x8||0,total:8});
+  opts.push({link:'pol|x4',label:'政治·肖四',cur:state.pol.x4||0,total:4});
+  opts.push({link:'vocab|y1',label:'单词·一刷',cur:state.vocab.y1,total:state.vocab.total});
+  const KS=['发展心理学','心理学导论','心理与教育研究方法'];
+  KS.forEach(subj=>{
+    [1,2,3,4].forEach(r=>{
+      const d=(state.know.pages[r]||{})[subj]||{cur:0,total:0};
+      if(d.total>0||d.cur>0||r<=2){
+        opts.push({link:'know|'+subj+'|'+r,label:'专业课·'+subj+' '+r+'轮',cur:d.cur,total:d.total});
+      }
+    });
+  });
+  return opts;
+}
+function getProgressByLink(link){
+  if(!link) return null;
+  const p=link.split('|');
+  if(p[0]==='eng'){ const o=state.eng[p[1]]||{}; return {cur:o[p[2]]||0,total:o.total||0}; }
+  if(p[0]==='pol'){ const max=(p[1]==='q1000'||p[1]==='q1000y2')?(state.pol.q1000Total||30):p[1]==='x8'?8:4; return {cur:state.pol[p[1]]||0,total:max}; }
+  if(p[0]==='vocab'){ return {cur:state.vocab[p[1]]||0,total:state.vocab.total||0}; }
+  if(p[0]==='know'){ const d=(state.know.pages[parseInt(p[2])]||{})[p[1]]||{}; return {cur:d.cur||0,total:d.total||0}; }
+  return null;
+}
+function setProgressByLink(link,cur,total){
+  if(!link) return;
+  const p=link.split('|');
+  cur=Math.max(0,parseInt(cur)||0);
+  if(p[0]==='eng'){
+    const o=state.eng[p[1]]; if(!o)return;
+    if(total!=null){ o.total=Math.max(1,parseInt(total)||0); }
+    o[p[2]]=Math.max(0,Math.min(o.total,cur));
+  }else if(p[0]==='pol'){
+    const max=(p[1]==='q1000'||p[1]==='q1000y2')?(state.pol.q1000Total||30):p[1]==='x8'?8:4;
+    state.pol[p[1]]=Math.max(0,Math.min(max,cur));
+  }else if(p[0]==='vocab'){
+    if(total!=null){ state.vocab.total=Math.max(1,parseInt(total)||0); }
+    state.vocab.y1=Math.max(0,Math.min(state.vocab.total,cur));
+  }else if(p[0]==='know'){
+    const r=parseInt(p[2]);
+    if(!state.know.pages[r]) state.know.pages[r]={};
+    if(!state.know.pages[r][p[1]]) state.know.pages[r][p[1]]={cur:0,total:0};
+    const d=state.know.pages[r][p[1]];
+    if(total!=null){ d.total=Math.max(0,parseInt(total)||0); }
+    d.cur=Math.max(0,Math.min(d.total,cur));
+  }
+}
+function syncMonthPlanFromProgress(){
+  if(!state.monthPlan) return;
+  state.monthPlan.forEach(it=>{
+    if(it.link){
+      const v=getProgressByLink(it.link);
+      if(v){ it.cur=v.cur; if(!it.total||it.total<v.total) it.total=v.total; if(it.total>0&&it.cur>=it.total) it.done=true; }
+    }
+  });
+}
+function syncProgressFromMonthPlan(changedItem){
+  if(!changedItem||!changedItem.link) return;
+  setProgressByLink(changedItem.link,changedItem.cur,changedItem.total);
 }
 let calMonth=8;
+// 按当天学习时长返回热力背景色（分钟数越高颜色越深）
+function studyHeat(sec){
+  const m=Math.floor((sec||0)/60);
+  if(m<=0) return '';
+  const steps=[[0,'rgba(47,170,106,0.14)'],[30,'rgba(47,170,106,0.28)'],[60,'rgba(47,170,106,0.44)'],[120,'rgba(47,170,106,0.62)'],[240,'rgba(47,170,106,0.8)'],[420,'rgba(47,170,106,0.95)']];
+  let c=steps[0][1];
+  for(const s of steps){ if(m>=s[0]) c=s[1]; }
+  return c;
+}
 function drawCalendar(month){
   const grid=$('#calGrid'); if(!grid) return;
   grid.innerHTML='';
@@ -1233,7 +1531,20 @@ function drawCalendar(month){
     if(st&&st.plan>0) extra+=`<span class="dot" style="background:${st.done/st.plan>=0.8?'var(--c-task)':'var(--c-home)'}"></span>`;
     if(state.tasks[ds]&&state.tasks[ds].length) extra+='<span class="tdt" title="有任务"></span>';
     c.innerHTML=`<div>${dd}</div>${extra}`;
-    c.onclick=()=>openCalDay(ds);
+    // 学习时长热力：除了"今天"保持蓝色高亮外，其余按当天学习时长着色
+    if(ds!==today){
+      const sec=studyTotalDay(ds);
+      const heat=studyHeat(sec);
+      if(heat){ c.style.background=heat; c.style.borderColor='rgba(47,170,106,.25)'; }
+      if(sec>0) c.title=fmtHumi(sec)+' · 学习时长';
+    }
+    c.onclick=()=>gotoTaskAt(ds);
+    // 长按日期：写日记 / 里程碑（原弹窗保留）
+    c.addEventListener('contextmenu',(e)=>{ e.preventDefault(); openCalDay(ds); });
+    let _pt=null;
+    c.addEventListener('touchstart',()=>{ _pt=setTimeout(()=>{ _pt=null; openCalDay(ds); },600); });
+    c.addEventListener('touchend',()=>{ if(_pt){ clearTimeout(_pt); _pt=null; } });
+    c.addEventListener('touchmove',()=>{ if(_pt){ clearTimeout(_pt); _pt=null; } });
     grid.appendChild(c);
   }
 }
@@ -1341,9 +1652,10 @@ function renderTask(main){
         <span class="pill" id="taskViewDatePill">${d} <span class="muted" style="font-weight:400">周${weekday}${isToday?' · 今天':''}</span></span>
         <button class="btn ghost sm" onclick="taskJumpToday()">今天</button>
         <button class="btn ghost sm" onclick="taskShiftDay(1)">后一天 ▶</button>
+        <button class="btn ghost sm" onclick="openCalDay('${d}')" title="写日记 / 标记里程碑" style="border-color:var(--c-cal);color:var(--c-cal)">📔</button>
       </div>
     </div>
-    <div class="sub">手动添加 · 自动同步到日历 · 用 ◀▶ 可查看任一天的任务</div>
+    <div class="sub">手动添加 · 自动同步到日历 · 用 ◀▶ 可查看任一天的任务${d!==todayStr()?' · <a href="javascript:copyAllToToday()" style="color:var(--c-task);font-weight:600">📋 复制全部任务到今天</a>':''}</div>
     <div id="taskList"></div>
     <div class="row" style="margin-top:8px">
       <input type="text" id="ntTitle" placeholder="任务内容，如：背发展心理学第5章" style="flex:2">
@@ -1485,22 +1797,23 @@ function aiAnalyze(tasks){
 function aiRefresh(){ state._aiSeed=(state._aiSeed||0)+1; persist(); renderTask($('#main')); }
 function taskHTML(t){
   const sc=SUBJ_COLOR[t.subj]||'#999';
+  const fid='tf_'+t.id;
+  const inpHtml=`<div class="upload-actions"><div class="upload-icon" onclick="doCamera('task_${t.id}')" title="直接拍照">📷</div><div class="upload-icon" onclick="doGallery('task_${t.id}')" title="图库上传">🖼</div></div>`;
   const ph=t.photo?`<div class="task-photo">
       <div class="thumb" onclick="taskPhotoView('${t.id}')">
         <img src="${t.photo}" alt="任务照片">
         <button class="del" onclick="event.stopPropagation();taskPhotoDel('${t.id}')" title="删除">×</button>
       </div>
-      <button class="btn ghost sm up-btn" onclick="document.getElementById('tf_${t.id}').click()">📷 换一张</button>
+      ${inpHtml}
     </div>`:`<div class="task-photo">
-      <button class="btn ghost sm up-btn" onclick="document.getElementById('tf_${t.id}').click()">📷 上传任务照片</button>
-      ${t.status==='todo'||t.status==='doing'?'<span class="need-photo">完成时需上传照片</span>':''}
+      ${inpHtml}
+      ${t.status==='todo'||t.status==='doing'?'<span class="need-photo">📷 照片可选，不拍也能完成</span>':''}
     </div>`;
   return `<div class="task ${t.status==='done'?'done':''} ${t.status==='doing'?'doing':''}" style="--subj:${sc};flex-wrap:wrap">
     <div class="tmain">
       <div class="tt">${t.title}</div>
       <div class="tm">${t.subj}${t.dur?` · ⏱${t.dur}min`:''} ${t.wrong?'<span class="wrong">错题</span>':''}</div>
       ${ph}
-      <input type="file" id="tf_${t.id}" accept="image/*" capture="environment" hidden onchange="taskUpload('${t.id}',this)">
     </div>
     <div class="states">
       <button class="state-dot ${t.status==='todo'?'on-todo':''}" title="未开始" onclick="setState('${t.id}','todo')">○</button>
@@ -1508,6 +1821,7 @@ function taskHTML(t){
       <button class="state-dot ${t.status==='done'?'on-done':''}" title="已完成" onclick="setState('${t.id}','done')">✓</button>
       <button class="state-dot" title="标记错题" style="border-color:${t.wrong?'var(--c-home)':''};background:${t.wrong?'var(--c-home)':''};color:#fff" onclick="toggleWrong('${t.id}')">✕</button>
       <button class="state-dot" title="编辑" style="background:var(--paper2);font-size:14px" onclick="taskEdit('${t.id}')">✏️</button>
+      <button class="state-dot" title="复制到今天" style="background:var(--paper2);font-size:14px" onclick="copyTaskToToday('${t.id}')">📋</button>
       <button class="state-dot" title="删除" style="background:var(--paper2);color:var(--c-home);font-size:14px" onclick="taskDel('${t.id}')">🗑</button>
     </div>
   </div>`;
@@ -1527,6 +1841,31 @@ function taskDel(id){
   if(state.tasksDeleted.length>1000) state.tasksDeleted=state.tasksDeleted.slice(-1000);
   persist(); renderTask($('#main')); $('#side').innerHTML=renderSide();
   toast('✓ 已删除');
+}
+function copyTaskToToday(id){
+  const d=taskViewDate; const today=todayStr();
+  const t=state.tasks[d]&&state.tasks[d].find(x=>x.id===id); if(!t)return;
+  if(!state.tasks[today]) state.tasks[today]=[];
+  state.tasks[today].push({id:uid(),time:'—',title:t.title,subj:t.subj,status:'todo',dur:0,wrong:false});
+  persist();
+  if(d===today){ renderTask($('#main')); } else { toast('📋 已复制「'+t.title+'」到今天'); }
+  $('#side').innerHTML=renderSide();
+  if(d===today) toast('📋 已复制「'+t.title+'」');
+}
+function copyAllToToday(){
+  const d=taskViewDate; const today=todayStr();
+  if(d===today){ toast('已经在查看今天了'); return; }
+  const src=state.tasks[d]||[];
+  if(!src.length){ toast('当前日期没有任务可复制'); return; }
+  if(!state.tasks[today]) state.tasks[today]=[];
+  let cnt=0;
+  src.forEach(t=>{
+    state.tasks[today].push({id:uid(),time:'—',title:t.title,subj:t.subj,status:'todo',dur:0,wrong:false});
+    cnt++;
+  });
+  persist();
+  taskViewDate=today; renderTask($('#main')); $('#side').innerHTML=renderSide();
+  toast('📋 已复制 '+cnt+' 条任务到今天');
 }
 function taskEdit(id){
   const d=taskViewDate; const t=state.tasks[d]&&state.tasks[d].find(x=>x.id===id); if(!t)return;
@@ -1556,12 +1895,7 @@ function taskEditSave(id){
 }
 function setState(id,s){
   const d=taskViewDate; const t=state.tasks[d].find(x=>x.id===id); if(!t)return;
-  // 标记完成时，若无照片则要求先上传
-  if(s==='done' && !t.photo){
-    toast('📷 完成任务前请先上传照片（学习证据）');
-    const f=document.getElementById('tf_'+id); if(f) f.click();
-    return;
-  }
+  // 拍照已改为可选：直接标记完成，不强制上传照片
   t.status=s; persist(); renderTask($('#main')); $('#side').innerHTML=renderSide();
 }
 function toggleWrong(id){
@@ -1705,7 +2039,7 @@ function preloadOCR(){
   getOCRWorker('chi_sim+eng').catch(()=>{});
 }
 
-/* ---------- 拍照打卡（ck = checkin）---------- */
+/* ---------- 旧照片兼容（ck = checkin）---------- */
 async function ckUpload(input){
   const files=Array.from(input.files||[]); if(!files.length)return;
   const d=todayStr();
@@ -2245,16 +2579,29 @@ function shuffleIdx(seedStr,n){
 function currentShizheng(){ return shufflePool(weekKey()).map(i=>SHIZHENG_POOL[i]); }
 function renderPol(main){
   const p=state.pol; const ph=phaseOf(todayStr());
-  const q1000pct=Math.round(p.q1000/1000*100);
+  const q1000tot=p.q1000Total||30;
+  const q1000pct=Math.round(p.q1000/q1000tot*100);
+  const q1000y2pct=Math.round((p.q1000y2||0)/q1000tot*100);
   const x8=p.x8, x4=p.x4;
   let html=`
   <div class="panel">
     <div class="spread"><h2>🇨🇳 政治专区</h2><span class="pill">${ph}·二战直开1000题</span></div>
-    <div class="sub">当前重心：${ph==='冲刺阶段'?'肖四肖八＋分析题带背':'肖1000题'}</div>
+    <div class="sub">当前重心：${ph==='冲刺阶段'?'肖四肖八＋分析题带背':'肖1000题（按节推进）'}</div>
     <div class="subj-card">
-      <div class="nm">肖秀荣 1000 题 <span class="stepper"><button onclick="polStep('q1000',-10)">−</button><b>${p.q1000}/1000</b><button onclick="polStep('q1000',10)">+</button></span>
-        <span class="stepper" style="margin-left:8px">手动 <input id="q1000in" type="number" min="0" max="1000" value="${p.q1000}" style="width:62px;padding:2px 4px;border:1px solid var(--line);border-radius:6px"> <button onclick="polSet('q1000')">设</button></span></div>
+      <div class="nm">肖秀荣 1000 题（按节）</div>
+      <div class="row" style="margin-top:6px;align-items:center;flex-wrap:wrap;gap:6px">
+        <span class="muted" style="font-size:12px">一刷</span>
+        <span class="stepper"><button onclick="polStep('q1000',-1)">−</button><b>${p.q1000}/${q1000tot}节</b><button onclick="polStep('q1000',1)">+</button></span>
+        <span class="muted" style="font-size:12px;margin-left:4px">二刷</span>
+        <span class="stepper"><button onclick="polStep('q1000y2',-1)">−</button><b>${p.q1000y2||0}/${q1000tot}节</b><button onclick="polStep('q1000y2',1)">+</button></span>
+      </div>
       <div class="bar" style="--accent:var(--c-pol);margin-top:8px"><i style="width:${q1000pct}%"></i></div>
+      <div class="bar" style="margin-top:4px;--accent:var(--c-prog)"><i style="width:${q1000y2pct}%"></i></div>
+      <div class="row" style="margin-top:6px;align-items:center;flex-wrap:wrap;gap:6px">
+        <span class="stepper">一刷手动 <input id="q1000in" type="number" min="0" max="${q1000tot}" value="${p.q1000}" style="width:52px;padding:2px 4px;border:1px solid var(--line);border-radius:6px"> <button onclick="polSet('q1000')">设</button></span>
+        <span class="stepper">二刷手动 <input id="q1000y2in" type="number" min="0" max="${q1000tot}" value="${p.q1000y2||0}" style="width:52px;padding:2px 4px;border:1px solid var(--line);border-radius:6px"> <button onclick="polSet('q1000y2')">设</button></span>
+        <span class="muted" style="font-size:11px;margin-left:4px">总节数</span> <input id="q1000totIn" type="number" min="1" value="${q1000tot}" style="width:46px;padding:2px 4px;border:1px solid var(--line);border-radius:6px" onchange="polSetTotal(this.value)">
+      </div>
     </div>
     <div class="row">
       <div class="subj-card" style="flex:1">
@@ -2325,13 +2672,23 @@ function szNextWeek(){
   const seed=weekKey()+'|m'+(Math.random()*1e9|0);
   state.pol.shizheng=shufflePool(seed).map(i=>SHIZHENG_POOL[i]); state.pol.shizhengIdx=0; persist(); renderSZ();
 }
-function polStep(k,n){ if(k==='q1000')state.pol.q1000=Math.max(0,Math.min(1000,state.pol.q1000+n)); else state.pol[k]=Math.max(0,Math.min(k==='x8'?8:4,state.pol[k]+n)); persist(); renderPol($('#main')); $('#side').innerHTML=renderSide(); }
+function polStep(k,n){ if(k==='q1000'||k==='q1000y2'){const tot=state.pol.q1000Total||30; state.pol[k]=Math.max(0,Math.min(tot,(state.pol[k]||0)+n)); syncMonthPlanAfterProgChange();} else state.pol[k]=Math.max(0,Math.min(k==='x8'?8:4,state.pol[k]+n)); persist(); renderPol($('#main')); $('#side').innerHTML=renderSide(); }
 function polSet(k){
-  if(k==='q1000'){
-    const v=Math.max(0,Math.min(1000, parseInt($('#q1000in').value)||0));
-    state.pol.q1000=v; if($('#q1000in'))$('#q1000in').value=v;
+  if(k==='q1000'||k==='q1000y2'){
+    const tot=state.pol.q1000Total||30;
+    const inEl=k==='q1000'?$('#q1000in'):$('#q1000y2in');
+    const v=Math.max(0,Math.min(tot, parseInt(inEl.value)||0));
+    state.pol[k]=v; if(inEl) inEl.value=v;
+    syncMonthPlanAfterProgChange();
   }
-  persist(); renderPol($('#main')); $('#side').innerHTML=renderSide(); toast('已设为 '+ (k==='q1000'? state.pol.q1000 : state.pol[k]));
+  persist(); renderPol($('#main')); $('#side').innerHTML=renderSide(); toast('已设为 '+ (k==='q1000'||k==='q1000y2'? state.pol[k]+'节' : state.pol[k]));
+}
+function polSetTotal(val){
+  state.pol.q1000Total=Math.max(1,parseInt(val)||30);
+  state.pol.q1000=Math.min(state.pol.q1000,state.pol.q1000Total);
+  state.pol.q1000y2=Math.min(state.pol.q1000y2||0,state.pol.q1000Total);
+  syncMonthPlanAfterProgChange();
+  persist(); renderPol($('#main')); $('#side').innerHTML=renderSide();
 }
 function polCardCat(cat,el){
   if(el&&el.parentElement){ el.parentElement.querySelectorAll('.tab').forEach(t=>t.classList.remove('on')); el.classList.add('on'); }
@@ -2573,8 +2930,7 @@ function renderWord(main){
     </div>
     <div class="row" style="margin-top:8px">
       <button class="btn sm" onclick="wordAdd()">添加单词</button>
-      <button class="btn ghost sm" onclick="document.getElementById('wordOCR').click()">📷 OCR 识别截图</button>
-      <input type="file" id="wordOCR" accept="image/*" hidden onchange="wordOCR(this)">
+      <div class="upload-actions"><div class="upload-wrap" onclick="doCamera('wordocr')"><span class="btn ghost sm" style="cursor:pointer">📷 拍照识别</span></div><div class="upload-wrap"><span class="btn ghost sm" style="cursor:pointer">🖼 识别截图</span><input type="file" id="wordOCRAlbum" accept="image/*" onchange="wordOCR(this)"></div></div>
     </div>
     <div id="wordOCRRes" style="margin-top:8px"></div>
   </div>`;
@@ -2750,6 +3106,9 @@ function delWord(){
 }
 async function wordOCR(input){
   const f=input.files[0]; if(!f)return;
+  wordOCRFile(f);
+}
+async function wordOCRFile(f){
   $('#wordOCRRes').innerHTML='<div class="muted">⏳ 识别中…</div>';
   try{
     const worker=await getOCRWorker('chi_sim+eng');
@@ -4069,14 +4428,54 @@ const SENTENCES=[
    tr:'规律体育锻炼不仅提升认知表现，还缓解焦虑与抑郁的症状。',
    tags:[['倒装','Not only does...'],['主语','regular physical exercise'],['谓语1','improve cognitive performance'],['递进','but it also alleviates symptoms of anxiety and depression']],
    ana:'Not only 置于句首引起部分倒装（does improve）；but also 连接递进分句。注意主谓一致与助动词位置。'},
+  {orig:'What makes this study particularly compelling is the longitudinal design that tracks participants over a period of two decades, thereby minimizing the confounding effects of short-term variables.',
+   tr:'使这项研究尤为令人信服的是其追踪参与者长达二十年的纵向设计，从而最大限度地减少了短期变量的混淆效应。',
+   tags:[['主语从句','What makes this study particularly compelling'],['系动词','is'],['表语','the longitudinal design'],['定语从句','that tracks participants over a period of two decades'],['结果状语','thereby minimizing the confounding effects of short-term variables']],
+   ana:'What 引导主语从句作主语，主句为主系表结构。表语 design 后接 that 定语从句；thereby minimizing... 为现在分词短语作结果状语。'},
+  {orig:'Hardly had the researchers published their preliminary findings when a wave of skepticism swept through the academic community, forcing them to reconsider their methodology.',
+   tr:'研究人员刚公布初步发现，一股怀疑浪潮便席卷学术界，迫使他们重新审视自己的方法论。',
+   tags:[['倒装','Hardly had...when...'],['主语','the researchers'],['谓语','had published'],['宾语','their preliminary findings'],['时间状语','when a wave of skepticism swept through the academic community'],['结果状语','forcing them to reconsider their methodology']],
+   ana:'Hardly...when... 固定句型，hardly 置首引起部分倒装（had published→had published）。when 分句为时间状语；forcing... 为现在分词作结果状语。'},
+  {orig:'The assumption underlying much of educational policy is that schools alone can rectify the social inequalities that students bring to the classroom.',
+   tr:'许多教育政策背后的假设是，学校能够独自纠正学生带入课堂的社会不平等。',
+   tags:[['主语','The assumption underlying much of educational policy'],['系动词','is'],['表语从句','that schools alone can rectify the social inequalities'],['定语从句','that students bring to the classroom']],
+   ana:'主语 assumption 后 underlying... 为现在分词作后置定语。that 引导表语从句；从句中 inequalities 后接 that 定语从句（省略了宾语关系代词）。'},
+  {orig:'Were it not for the perseverance of early pioneers who challenged the prevailing orthodoxy, the field of cognitive science would not have attained its current prominence.',
+   tr:'若非早期先驱们挑战主流正统观念的坚持，认知科学就不会达到如今的显赫地位。',
+   tags:[['虚拟倒装','Were it not for...'],['主语','the perseverance of early pioneers'],['定语从句','who challenged the prevailing orthodoxy'],['主句','the field of cognitive science would not have attained its current prominence']],
+   ana:'Were it not for = If it were not for，虚拟语气倒装。主句 would not have attained 为与过去事实相反的虚拟。who 引导定语从句修饰 pioneers。'},
+  {orig:'Coupled with the growing body of empirical evidence, theoretical models that once seemed unassailable are now being subjected to rigorous reevaluation by a new generation of scholars.',
+   tr:'结合越来越多的实证证据，曾经看似无懈可击的理论模型如今正受到新一代学者的严格重新审视。',
+   tags:[['过去分词状语','Coupled with the growing body of empirical evidence'],['主语','theoretical models'],['定语从句','that once seemed unassailable'],['谓语','are now being subjected to'],['宾语','rigorous reevaluation by a new generation of scholars']],
+   ana:'Coupled with... 过去分词短语作伴随状语。主语 models 后接 that 定语从句。谓语为现在进行时被动语态 are being subjected to。'},
+  {orig:'The extent to which environmental factors can compensate for genetic predispositions remains a subject of intense debate among developmental psychologists.',
+   tr:'环境因素能在多大程度上弥补遗传倾向，仍然是发展心理学家激烈争论的话题。',
+   tags:[['主语','The extent'],['定语从句','to which environmental factors can compensate for genetic predispositions'],['系动词','remains'],['表语','a subject of intense debate among developmental psychologists']],
+   ana:'主语 extent 后接 to which 引导的定语从句（to which = to what extent）。主句为主系表结构。注意 to which 的用法。'},
+  {orig:'Only when we account for the interplay between nature and nurture can we begin to understand the complexities of human cognitive development.',
+   tr:'只有当我们考虑到先天与后天之间的相互作用时，我们才能开始理解人类认知发展的复杂性。',
+   tags:[['状语','Only when we account for the interplay between nature and nurture'],['倒装','can we begin to...'],['主语','we'],['谓语','can begin to understand'],['宾语','the complexities of human cognitive development']],
+   ana:'Only + 状语从句置于句首，主句部分倒装（can we begin）。account for = 考虑/解释。注意 only 引起倒装的结构。'},
+  {orig:'Researchers have come to appreciate that the relationship between socioeconomic status and academic achievement is far more nuanced than previously supposed, mediated by factors as diverse as nutrition and parental involvement.',
+   tr:'研究者们逐渐认识到，社会经济地位与学业成就之间的关系远比此前认为的更为微妙，受到从营养到父母参与等多种因素的调节。',
+   tags:[['主语','Researchers'],['谓语','have come to appreciate'],['宾语从句','that the relationship... is far more nuanced than previously supposed'],['后置定语','mediated by factors as diverse as nutrition and parental involvement']],
+   ana:'have come to appreciate = 逐渐认识到。that 宾语从句中含 than 比较结构；mediated by... 为过去分词短语作后置定语修饰 relationship。'},
+  {orig:'It is not the absence of difficulty but rather the manner in which one confronts adversity that ultimately shapes the trajectory of personal growth.',
+   tr:'最终决定个人成长轨迹的，不是困难的缺席，而是面对逆境的方式。',
+   tags:[['强调句','It is ... that ...'],['主语','not the absence of difficulty but rather the manner'],['定语从句','in which one confronts adversity'],['谓语','shapes'],['宾语','the trajectory of personal growth']],
+   ana:'It is A but rather B that... 强调句型，强调 not...but rather... 结构。in which = by which 的变形，引导定语从句修饰 manner。'},
+  {orig:'So profound has been the impact of digital technology on modern pedagogy that traditional distinctions between teaching and learning have become increasingly blurred.',
+   tr:'数字技术对现代教育学的影响如此深远，以至于教与学之间的传统界限已变得日益模糊。',
+   tags:[['倒装','So profound has been...'],['主语','the impact of digital technology on modern pedagogy'],['系动词','has been'],['结果状语','that traditional distinctions between teaching and learning have become increasingly blurred']],
+   ana:'So...that... 句型中 so + 形容词置于句首引起完全倒装（has been the impact）。that 引导结果状语从句。注意表语前置的倒装结构。'},
 ];
 function renderSent(main){
   if(!state._sentIdx) state._sentIdx=0;
   const wk=weekKey();
   if(state._sentWk!==wk){
     state._sentWk=wk;
-    // 一周 3 句，从 SENTENCES 中抽
-    state._sentPick=shufflePool('sent|'+wk, SENTENCES.length).slice(0,3);
+    // 一周 3 句，从 SENTENCES 中随机抽（每周不同）
+    state._sentPick=shuffleIdx('sent|'+wk, SENTENCES.length).slice(0,3);
     state._sentIdx=0; persist();
   }
   const pick=state._sentPick;
@@ -4104,8 +4503,7 @@ function renderSent(main){
       <textarea id="mySentInput" placeholder="粘贴或输入一句英文长难句，例如：It is the interaction between people, rather than the events that occur in their lives, that determines who they become."></textarea>
       <div class="row" style="margin-top:8px">
         <button class="btn sm" onclick="addMySent()">➕ 添加并分析</button>
-        <button class="btn ghost sm" onclick="document.getElementById('mySentOCR').click()">📷 拍照识别</button>
-        <input type="file" id="mySentOCR" accept="image/*" capture="environment" hidden onchange="ocrMySent(this)">
+        <div class="upload-actions"><div class="upload-wrap" onclick="doCamera('mysent')"><span class="btn ghost sm" style="cursor:pointer">📷 拍照识别</span></div><div class="upload-wrap"><span class="btn ghost sm" style="cursor:pointer">🖼 相册识别</span><input type="file" id="mySentOCRAlbum" accept="image/*" onchange="ocrMySent(this)"></div></div>
       </div>
       <div id="mySentOCRRes" class="muted" style="font-size:12px;margin-top:4px"></div>
       <div id="mySentList" style="margin-top:8px"></div>
@@ -4133,6 +4531,10 @@ function addMySent(){
 }
 async function ocrMySent(input){
   const f=input.files[0]; if(!f)return;
+  ocrMySentFile(f);
+  input.value='';
+}
+async function ocrMySentFile(f){
   const res=$('#mySentOCRRes'); if(!res) return;
   res.textContent='⏳ 识别中…（首次需下载英文包，请稍候）';
   try{
@@ -4144,7 +4546,6 @@ async function ocrMySent(input){
     if($('#mySentInput')) $('#mySentInput').value=line;
     res.textContent= line ? '✓ 识别完成，点「添加并分析」' : '未识别到文字，换个角度再拍';
   }catch(e){ res.textContent='识别失败：'+e.message; }
-  input.value='';
 }
 function renderMySentList(){
   const el=$('#mySentList'); if(!el) return;
@@ -4477,14 +4878,13 @@ function renderSide(){
   if(!state.dog || state.dog.date!==d){ state.dog={phase:0,fed:0,date:d,resetDate:''}; }
   resetDogIfNeeded();
   const phase=state.dog.phase||0;
-  const studyMin=Math.floor(studyTotalDay(d)/60);
-  const petMsg = pangpangMessage(pct, studyMin, phase);
+  const petMsg = pangpangMessage(pct, phase);
   const e=state.eng;
   const engCards=['完形','阅读','新题型','作文'];
   const KS=['发展心理学','心理学导论','心理与教育研究方法'];
   const r=state.know.round;
   const engMini=engCards.map(c=>{const o=e[c]||{y1:0,y2:0,total:0};return `<div class="stat-mini"><span>🇬🇧 ${c}</span><span>一${o.y1}/${o.total}·二${o.y2}</span></div>`;}).join('');
-  const polMini=`<div class="stat-mini"><span>🇨🇳 1000题</span><span>${state.pol.q1000}/1000</span></div><div class="stat-mini"><span>肖八</span><span>${state.pol.x8||0}/8</span></div><div class="stat-mini"><span>肖四</span><span>${state.pol.x4||0}/4</span></div>`;
+  const polMini=`<div class="stat-mini"><span>🇨🇳 1000题</span><span>一${state.pol.q1000}/${state.pol.q1000Total||30}节·二${state.pol.q1000y2||0}</span></div><div class="stat-mini"><span>肖八</span><span>${state.pol.x8||0}/8</span></div><div class="stat-mini"><span>肖四</span><span>${state.pol.x4||0}/4</span></div>`;
   const knowMini=KS.map(subj=>{const d=state.know.pages[r][subj];return `<div class="stat-mini"><span>📚 ${subj}</span><span>${d.cur}/${d.total}</span></div>`;}).join('');
   let html=`
   <div class="panel">
@@ -4493,7 +4893,7 @@ function renderSide(){
       <div class="dog">${dogSvg()}</div>
       <div class="hearts">${Array(4).fill(0).map((_,i)=>i<phase?'❤️':'🤍').join('')}</div>
       <div class="dog-talk">${petMsg}</div>
-      <button class="btn sm" onclick="feedDog()">给胖胖一个小奖励</button>
+      <button class="btn sm" onclick="pangpangTap()">点点胖胖</button>
     </div>
   </div>
   <div class="panel">
@@ -4529,39 +4929,56 @@ function renderSide(){
 }
 function sideSetTask(id,checked){
   const d=todayStr(); const t=state.tasks[d].find(x=>x.id===id); if(!t)return;
-  if(checked && !t.photo){
-    toast('📷 完成任务需先上传照片，正在跳转打卡页…');
-    showModule('task');
-    setTimeout(()=>{ const f=document.getElementById('tf_'+id); if(f) f.click(); },300);
-    return;
-  }
   t.status=checked?'done':'todo'; persist();
   const main=document.querySelector('#main'); if(main && current==='task') renderTask(main);
   $('#side').innerHTML=renderSide();
 }
 function exportBackup(){
-  const data=load('state',{});
-  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a'); a.href=url;
-  a.download='kyb-backup-'+new Date().toISOString().slice(0,10)+'.json';
-  a.click(); URL.revokeObjectURL(url);
-  toast('✓ 已导出备份，去另一台设备「导入备份」即可');
+  const data=state||load('state',{});
+  const jsonStr=JSON.stringify(data,null,2);
+  const filename='kyb-backup-'+new Date().toISOString().slice(0,10)+'.json';
+  // 方式1: Android接口保存文件
+  if(window.Android && typeof window.Android.saveFile==='function'){
+    try{
+      const ok=window.Android.saveFile(filename, jsonStr);
+      if(ok){ toast('✓ 已导出到 Download/Android/trae 文件夹：'+filename+'（进文件管理→下载→Android→trae 查找，长按可分享到微信/QQ）'); return; }
+      toast('导出未成功：请先允许存储权限，再点一次导出'); return;
+    }catch(_){}
+  }
+  // 方式2: Blob下载
+  try{
+    const blob=new Blob([jsonStr],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url;
+    a.download=filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    toast('✓ 已导出备份: '+filename);
+  }catch(e){
+    // 方式3: 新窗口打开
+    const blob=new Blob([jsonStr],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    toast('✓ 已在新窗口打开备份，长按保存');
+  }
 }
 function importBackup(input){
-  const f=input.files[0]; if(!f)return;
+  const f=input.files&&input.files[0]; if(!f){ toast('未选择文件'); return; }
   const r=new FileReader();
   r.onload=()=>{
     try{
       const d=JSON.parse(r.result);
       if(typeof d!=='object'||!d) throw new Error('不是有效的备份文件');
+      snap();
       const old=load('state',{});
       const merged=Object.assign({},DEFAULT_STATE,old,d); // DEFAULT 兜底，以导入文件为准覆盖
-      save('state',merged); state=merged;
+      try{ save('state',merged); }catch(_){ /* localStorage满也继续 */ }
+      state=merged;
       toast('✓ 导入成功，正在刷新…');
       setTimeout(()=>{ $('#side').innerHTML=renderSide(); const main=document.querySelector('#main'); if(main&&current) showModule(current); }, 300);
     }catch(e){ toast('导入失败：'+e.message); }
   };
+  r.onerror=()=>{ toast('读取文件失败，请重试'); };
   r.readAsText(f); input.value='';
 }
 /* ---------- 云同步：手机/平板实时互相同步 ---------- */
@@ -4608,6 +5025,75 @@ function mergeTasks(local, remote, localDel, remoteDel){
   for(const {t,date} of map.values()){ (out[date]=out[date]||[]).push(t); }
   return out;
 }
+function deepMergeMax(local,remote){
+  if(typeof local!=='object'||local===null||typeof remote!=='object'||remote===null){
+    if(typeof local==='number'||typeof remote==='number') return Math.max(local||0,remote||0);
+    return remote!==undefined?remote:local;
+  }
+  if(Array.isArray(local)||Array.isArray(remote)) return remote||local;
+  const out={};
+  const keys=new Set([...Object.keys(local||{}),...Object.keys(remote||{})]);
+  for(const k of keys){
+    const lv=(local||{})[k], rv=(remote||{})[k];
+    if(typeof lv==='number'||typeof rv==='number'){ out[k]=Math.max(lv||0,rv||0); }
+    else if(typeof lv==='object'&&typeof rv==='object'&&lv&&rv&&!Array.isArray(lv)&&!Array.isArray(rv)){ out[k]=deepMergeMax(lv,rv); }
+    else { out[k]=rv!==undefined?rv:lv; }
+  }
+  return out;
+}
+function arrayMergeByKey(local,remote,keyFn){
+  const map=new Map();
+  (local||[]).forEach(x=>{ if(x) map.set(keyFn(x),x); });
+  (remote||[]).forEach(x=>{ if(x){ const k=keyFn(x); if(!map.has(k)) map.set(k,x); } });
+  return Array.from(map.values());
+}
+function studyLogMerge(local,remote){
+  const out={};
+  const dates=new Set([...Object.keys(local||{}),...Object.keys(remote||{})]);
+  for(const d of dates){
+    const lv=(local||{})[d]||{}, rv=(remote||{})[d]||{};
+    out[d]={};
+    const subs=new Set([...Object.keys(lv),...Object.keys(rv)]);
+    for(const s of subs){ out[d][s]=Math.max(lv[s]||0,rv[s]||0); }
+  }
+  return out;
+}
+function monthPlanMerge(local,remote,localDel,remoteDel){
+  // 合并删除墓碑
+  const allDel=[...(localDel||[]),...(remoteDel||[])];
+  const delMap=new Map();
+  allDel.forEach(d=>{ const ex=delMap.get(d.key); if(!ex||d._t>ex._t) delMap.set(d.key,d); });
+  const keyFn=x=>(x.month||'')+'|'+(x.t||'').trim().toLowerCase();
+  // 先合并出每条记录的最新版本
+  const latest=new Map();
+  (local||[]).forEach(x=>{ if(x){ const k=keyFn(x); const ex=latest.get(k); if(!ex||(x._t||0)>=(ex._t||0)) latest.set(k,Object.assign({},x)); } });
+  (remote||[]).forEach(x=>{
+    if(!x) return;
+    const k=keyFn(x);
+    const del=delMap.get(k);
+    if(del && (!x._t || del._t>=x._t)) return;
+    const ex=latest.get(k);
+    if(!ex||(x._t||0)>=(ex._t||0)) latest.set(k,Object.assign({},x));
+  });
+  // 过滤掉被墓碑删除的项
+  for(const [k,v] of latest){
+    const del=delMap.get(k);
+    if(del && (!v._t || del._t>=v._t)) latest.delete(k);
+  }
+  // 排序：以 _t 更新的那边的数组顺序为准
+  const localT=Math.max(...(local||[]).map(x=>x._t||0),0);
+  const remoteT=Math.max(...(remote||[]).map(x=>x._t||0),0);
+  const orderSrc=remoteT>localT?(remote||[]):(local||[]);
+  const orderMap=new Map();
+  orderSrc.forEach((x,idx)=>{ if(x) orderMap.set(keyFn(x),idx); });
+  const result=Array.from(latest.values());
+  result.sort((a,b)=>{
+    const oa=orderMap.get(keyFn(a))??9999;
+    const ob=orderMap.get(keyFn(b))??9999;
+    return oa-ob;
+  });
+  return result;
+}
 async function syncNow(forcePull){
   const s=state.sync; if(!s||!s.on||!s.code) return;
   s.status='ing';
@@ -4624,12 +5110,48 @@ async function syncNow(forcePull){
     const mergedTasks=mergeTasks(state.tasks, remoteState.tasks, state.tasksDeleted, remoteDel);
     const mergedDel=Array.from(new Set([...state.tasksDeleted, ...remoteDel]));
 
-    // ② 其它字段：最后写入胜出（谁新用谁的）
+    // ② 全板块智能合并（逐字段取最优值，不再整 state 覆盖）
+    const merged=Object.assign({}, DEFAULT_STATE);
+    // 进度类：取两边的最大值（进度只增不减）
+    merged.eng=deepMergeMax(state.eng||{},remoteState.eng||{});
+    merged.pol=deepMergeMax(state.pol||{},remoteState.pol||{});
+    merged.vocab=deepMergeMax(state.vocab||{},remoteState.vocab||{});
+    merged.know=deepMergeMax(state.know||{},remoteState.know||{});
+    // 学习记录：每天每科取最大秒数
+    merged.studyLog=studyLogMerge(state.studyLog||{},remoteState.studyLog||{});
+    merged.studyToday=deepMergeMax(state.studyToday||{},remoteState.studyToday||{});
+    merged.studyTime=deepMergeMax(state.studyTime||{},remoteState.studyTime||{});
+    // 数组类：按内容去重合并
+    merged.monthPlan=monthPlanMerge(state.monthPlan||[],remoteState.monthPlan||[],state.monthDeleted||[],remoteState.monthDeleted||[]);
+    merged.monthDeleted=Array.from(new Set([...(state.monthDeleted||[]),...(remoteState.monthDeleted||[])]));
+    merged.weekPlan=arrayMergeByKey(state.weekPlan||[],remoteState.weekPlan||[],x=>(x.week||'')+'|'+(x.t||'').trim().toLowerCase());
+    merged.keyDates=arrayMergeByKey(state.keyDates||[],remoteState.keyDates||[],x=>(x.n||'')+'|'+(x.d||''));
+    merged.mySent=arrayMergeByKey(state.mySent||[],remoteState.mySent||[],x=>(x.en||x.s||'').trim().toLowerCase());
+    merged.mood=arrayMergeByKey(state.mood||[],remoteState.mood||[],x=>(x.date||'')+'|'+(x.mood||''));
+    merged.progressPlan=((remoteState.progressPlan||[]).length>=(state.progressPlan||[]).length?remoteState.progressPlan:state.progressPlan)||[];
+    merged.moduleOrder=(state.moduleOrder&&state.moduleOrder.length)?state.moduleOrder:(remoteState.moduleOrder||[]);
+    merged.sched=arrayMergeByKey(state.sched||[],remoteState.sched||[],x=>(x.d||'')+'|'+(x.t||''));
+    // 胖胖：取最大阶段
+    merged.dog=deepMergeMax(state.dog||{},remoteState.dog||{});
+    // 单词列表：合并去重 + 取最大 cur/round
+    merged.words=deepMergeMax(state.words||{},remoteState.words||{});
+    if((state.words||{}).list&&remoteState.words&&remoteState.words.list){
+      merged.words.list=arrayMergeByKey(state.words.list,remoteState.words.list,x=>(x.en||'').toLowerCase());
+    }
+    // 日记/里程碑/日历统计：按日期合并（取非空值）
+    merged.diary=Object.assign({},state.diary||{},remoteState.diary||{});
+    merged.calMile=Object.assign({},state.calMile||{},remoteState.calMile||{});
+    merged.calStat=deepMergeMax(state.calStat||{},remoteState.calStat||{});
+    // 其他标量字段：取较新版本（谁的 mtime 新用谁的）
+    const newerFields=['examDate','taskDate','taskGen','wkPos','checkins'];
     const base = remoteMtime>localMtime ? remoteState : state;
-    const merged=Object.assign({}, DEFAULT_STATE, base);
+    newerFields.forEach(k=>{ merged[k]=base[k]!==undefined?base[k]:state[k]; });
+    // 任务和删除墓碑
     merged.tasks=mergedTasks;
     merged.tasksDeleted=mergedDel;
-    merged.sync=state.sync;   // 本机同步配置不被远端覆盖
+    // 本机同步配置不被远端覆盖
+    merged.sync=state.sync;
+    merged.gh=state.gh;
 
     const keepSync=state.sync;
     state=merged;
@@ -4651,44 +5173,60 @@ async function syncNow(forcePull){
 }
 function renderCloud(main){
   const s=state.sync||{};
+  const g=ghCfg();
   let html=`
   <div class="panel">
-    <div class="spread"><h2>☁️ 云同步</h2><span class="pill">${s.on?'已开启 · 自动同步':'未开启'}</span></div>
-    <div class="sub">手机、平板填<b>同一个同步码</b>即自动实时同步；按修改时间合并，换设备也能恢复。</div>
+    <div class="spread"><h3 style="margin-top:0">🐙 GitHub 自动备份（推荐）</h3><span class="pill">${g.on?'已开启':'未开启'}</span></div>
+    <div class="sub">数据直接存进<b>你自己的 GitHub 私有仓库</b>，不怕后台挂掉；手机、平板都填同一仓库即可互相备份、换设备恢复。照片仅保存在本机、不进入 GitHub（避免闪退）。</div>
     <div class="row" style="margin-top:8px;align-items:center">
-      <input type="text" id="syncCode" placeholder="设一个同步码，如 kao2026" value="${(s.code)||''}" style="flex:2" oninput="syncCodeSet(this.value)">
-      <button class="btn sm" id="syncBtn" onclick="toggleSync()">${s.on?'⏸ 关闭同步':'▶ 开启同步'}</button>
+      <input type="text" id="ghOwner" placeholder="GitHub 用户名" value="${(g.owner)||''}" style="flex:1" oninput="ghSet('owner',this.value)">
+      <input type="text" id="ghRepo" placeholder="仓库名" value="${(g.repo)||''}" style="flex:1" oninput="ghSet('repo',this.value)">
     </div>
-    <div class="muted" style="font-size:12px;margin-top:6px" id="syncStatus">${syncStatusText()}</div>
-    <div class="sub" style="margin-top:12px;font-weight:600">手动迁移（换设备 / 首启备份）</div>
-    <div class="row" style="margin-top:6px;gap:8px">
-      <button class="btn sm" style="flex:1" onclick="cloudBackup()">📤 备份至服务器</button>
-      <button class="btn ghost sm" style="flex:1" onclick="cloudRestore()">📥 恢复至本机</button>
+    <div class="row" style="margin-top:6px;align-items:center">
+      <input type="password" id="ghToken" placeholder="Personal Access Token" value="${(g.token)||''}" style="flex:1" oninput="ghSet('token',this.value)">
+      <input type="text" id="ghPath" placeholder="文件名 data.json" value="${(g.path)||'data.json'}" style="flex:1" oninput="ghSet('path',this.value)">
     </div>
-    <div class="muted" style="font-size:11px;margin-top:6px">先在一台设备点「备份至服务器」，再到另一台点「恢复至本机（合并）」，只需一次即可迁移全部数据。</div>
-    <div class="row" style="margin-top:6px">
-      <button class="btn ghost sm" onclick="syncNow()">🔄 立即同步</button>
+    <div class="row" style="margin-top:8px;gap:8px">
+      <button class="btn sm" id="ghBtn" onclick="ghToggle()">${g.on?'⏸ 关闭自动备份':'▶ 开启自动备份'}</button>
+      <button class="btn sm" style="flex:1" onclick="ghBackup()">📤 备份到 GitHub</button>
+      <button class="btn ghost sm" style="flex:1" onclick="ghRestore()">📥 从 GitHub 恢复</button>
+    </div>
+    <div class="muted" style="font-size:12px;margin-top:6px" id="ghStatus">${ghStatusText()}</div>
+    <div class="row" style="margin-top:8px;gap:8px">
+      <button class="btn ghost sm" style="flex:1" onclick="snapRestore()">🛟 恢复到最近快照</button>
     </div>
   </div>
   <div class="panel">
-    <h3 style="margin-top:0">⚙️ 数据管理（导出 / 导入文件）</h3>
-    <div class="sub">换设备 / 备份用。导出后到另一台设备导入即可恢复进度。</div>
+    <h3 style="margin-top:0">⚙️ 数据管理</h3>
+    <div class="sub">本地文件备份只作为备用；日常建议直接用上面的 GitHub 自动备份。</div>
     <div class="row" style="margin-top:6px">
-      <button class="btn sm" onclick="exportBackup()">📤 导出备份</button>
-      <button class="btn ghost sm" onclick="document.getElementById('impFile').click()">📥 导入备份</button>
-      <input type="file" id="impFile" accept="application/json,.json" hidden onchange="importBackup(this)">
+      <button class="btn ghost sm" onclick="exportBackup()">本地导出</button>
+      <div class="upload-wrap"><span class="btn ghost sm" style="cursor:pointer">本地导入</span><input type="file" id="impFile" accept="*/*" onchange="importBackup(this)"></div>
     </div>
   </div>`;
   main.innerHTML=html;
 }
 async function cloudBackup(){
-  const s=state.sync; if(!s||!s.code){ toast('请先填同步码'); return; }
-  toast('📤 正在备份至服务器…');
+  let code=(state.sync&&state.sync.code)||'';
+  const inp=document.getElementById('syncCode');
+  if(!code && inp){ code=(inp.value||'').trim(); if(code){ state.sync=state.sync||{code:'',on:false,lastAt:0}; state.sync.code=code; } }
+  if(!code){ toast('请先填同步码'); return; }
+  toast('📤 正在备份到后台…');
   try{
-    const resp=await fetch(SYNC_BASE + '/api/sync?code='+encodeURIComponent(s.code),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({state:Object.assign({},DEFAULT_STATE,state)})});
+    let remoteState={};
+    try{
+      const r=await fetch(SYNC_BASE + '/api/sync?code='+encodeURIComponent(code));
+      if(r.ok){ const remote=await r.json(); remoteState=remote.state||{}; }
+    }catch(_){}
+    const keepSync=state.sync||{code:code,on:false,lastAt:0};
+    const merged=mergeForCloud(state, remoteState);
+    merged.sync=keepSync;
+    const resp=await fetch(SYNC_BASE + '/api/sync?code='+encodeURIComponent(code),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({state:merged})});
     if(!resp.ok) throw new Error('HTTP '+resp.status);
-    const jr=await resp.json(); state._mtime=jr._mtime||Date.now(); persist();
-    toast('✅ 已备份至服务器');
+    const jr=await resp.json();
+    state=merged; state._mtime=jr._mtime||Date.now();
+    try{ persist(); }catch(_){}
+    toast('✅ 已备份到后台');
   }catch(e){ toast('备份失败：'+e.message); }
 }
 async function cloudRestore(){
@@ -4698,11 +5236,152 @@ async function cloudRestore(){
     const r=await fetch(SYNC_BASE + '/api/sync?code='+encodeURIComponent(s.code));
     if(!r.ok) throw new Error('HTTP '+r.status);
     const remote=await r.json();
-    const merged=mergeForRestore(state, remote.state||{});
+    const remoteState=remote.state||{};
+    snap();
+    // 智能合并（和 syncNow 一样的逐字段合并逻辑，保证新数据不被旧数据覆盖）
+    const keepSync=state.sync;
+    state.tasksDeleted=state.tasksDeleted||[];
+    const remoteDel=(remoteState.tasksDeleted)||[];
+    const mergedTasks=mergeTasks(state.tasks, remoteState.tasks, state.tasksDeleted, remoteDel);
+    const mergedDel=Array.from(new Set([...state.tasksDeleted, ...remoteDel]));
+    const merged=Object.assign({}, DEFAULT_STATE);
+    merged.eng=deepMergeMax(state.eng||{},remoteState.eng||{});
+    merged.pol=deepMergeMax(state.pol||{},remoteState.pol||{});
+    merged.vocab=deepMergeMax(state.vocab||{},remoteState.vocab||{});
+    merged.know=deepMergeMax(state.know||{},remoteState.know||{});
+    merged.studyLog=studyLogMerge(state.studyLog||{},remoteState.studyLog||{});
+    merged.studyToday=deepMergeMax(state.studyToday||{},remoteState.studyToday||{});
+    merged.studyTime=deepMergeMax(state.studyTime||{},remoteState.studyTime||{});
+    merged.monthPlan=monthPlanMerge(state.monthPlan||[],remoteState.monthPlan||[],state.monthDeleted||[],remoteState.monthDeleted||[]);
+    merged.monthDeleted=Array.from(new Set([...(state.monthDeleted||[]),...(remoteState.monthDeleted||[])]));
+    merged.weekPlan=arrayMergeByKey(state.weekPlan||[],remoteState.weekPlan||[],x=>(x.week||'')+'|'+(x.t||'').trim().toLowerCase());
+    merged.keyDates=arrayMergeByKey(state.keyDates||[],remoteState.keyDates||[],x=>(x.n||'')+'|'+(x.d||''));
+    merged.mySent=arrayMergeByKey(state.mySent||[],remoteState.mySent||[],x=>(x.en||x.s||'').trim().toLowerCase());
+    merged.mood=arrayMergeByKey(state.mood||[],remoteState.mood||[],x=>(x.date||'')+'|'+(x.mood||''));
+    merged.progressPlan=((remoteState.progressPlan||[]).length>=(state.progressPlan||[]).length?remoteState.progressPlan:state.progressPlan)||[];
+    merged.moduleOrder=(state.moduleOrder&&state.moduleOrder.length)?state.moduleOrder:(remoteState.moduleOrder||[]);
+    merged.sched=arrayMergeByKey(state.sched||[],remoteState.sched||[],x=>(x.d||'')+'|'+(x.t||''));
+    merged.dog=deepMergeMax(state.dog||{},remoteState.dog||{});
+    merged.words=deepMergeMax(state.words||{},remoteState.words||{});
+    if((state.words||{}).list&&remoteState.words&&remoteState.words.list){
+      merged.words.list=arrayMergeByKey(state.words.list,remoteState.words.list,x=>(x.en||'').toLowerCase());
+    }
+    merged.diary=Object.assign({},state.diary||{},remoteState.diary||{});
+    merged.calMile=Object.assign({},state.calMile||{},remoteState.calMile||{});
+    merged.calStat=deepMergeMax(state.calStat||{},remoteState.calStat||{});
+    const remoteMtime=remote._mtime||0;
+    const localMtime=state._mtime||0;
+    const newerFields=['examDate','taskDate','taskGen','wkPos','checkins'];
+    const base = remoteMtime>localMtime ? remoteState : state;
+    newerFields.forEach(k=>{ merged[k]=base[k]!==undefined?base[k]:state[k]; });
+    merged.tasks=mergedTasks;
+    merged.tasksDeleted=mergedDel;
+    merged.sync=keepSync;
+    merged.gh=ghCfg();
+    merged._mtime=Date.now();
     state=merged; persist();
+    // 恢复后立即把合并结果推回云端，确保两端数据一致
+    try{
+      await fetch(SYNC_BASE + '/api/sync?code='+encodeURIComponent(s.code),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({state:merged})});
+    }catch(_){}
     const main=document.querySelector('#main'); if(main&&current) showModule(current);
-    toast('✅ 已从服务器恢复（已合并）');
+    $('#side').innerHTML=renderSide();
+    toast('✅ 已从服务器恢复（智能合并 + 已同步回云端）');
   }catch(e){ toast('恢复失败：'+e.message); }
+}
+/* ---------- 🐙 GitHub 自动备份（手机/平板都备份到你的 GitHub 私有仓库） ---------- */
+function ghCfg(){ state.gh=state.gh||{token:'',owner:'',repo:'',path:'data.json',on:false,lastAt:0,msg:''}; return state.gh; }
+function ghSet(k,v){ ghCfg()[k]=v; persist(); }
+function ghHeaders(){
+  return {
+    'Authorization':'Bearer '+(ghCfg().token||'').trim(),
+    'Accept':'application/vnd.github+json',
+    'X-GitHub-Api-Version':'2022-11-28',
+    'Content-Type':'application/json'
+  };
+}
+function utf8b64(str){ return btoa(unescape(encodeURIComponent(str))); }
+function b64utf8(b64){ return decodeURIComponent(escape(atob(b64))); }
+function ghUrl(){
+  const g=ghCfg();
+  return 'https://api.github.com/repos/'+encodeURIComponent((g.owner||'').trim())+'/'+encodeURIComponent((g.repo||'').trim())+'/contents/'+(g.path||'data.json');
+}
+async function ghGetFile(){
+  const r=await fetch(ghUrl(),{headers:ghHeaders()});
+  if(r.status===404) return null;
+  if(!r.ok){ let t=''; try{ t=await r.text(); }catch(_){} throw new Error('GitHub '+r.status+' '+t.slice(0,120)); }
+  const j=await r.json();
+  return {sha:j.sha, content:j.content||''};
+}
+// 外刊笔记单独存在 localStorage（artnote_N），备份时一并收集、恢复时写回
+function collectArtNotes(){
+  const out={};
+  try{ (ARTICLES||[]).forEach((_,i)=>{ const n=load('artnote_'+i,''); if(n) out[i]=n; }); }catch(_){}
+  return out;
+}
+function restoreArtNotes(map){
+  if(!map||typeof map!=='object') return;
+  for(const k in map){ try{ save('artnote_'+k, map[k]); }catch(_){} }
+}
+async function ghBackup(silent){
+  const g=ghCfg();
+  if(!g.token||!g.owner||!g.repo){ if(!silent) toast('请先填 GitHub Token / 用户名 / 仓库名'); return; }
+  if(!silent) toast('🐙 正在备份到 GitHub…');
+  try{
+    const payload=Object.assign({}, state);
+    delete payload.sync; delete payload.gh; delete payload.checkins; // 照片不进入 GitHub，避免 base64 序列化造成闪退
+    payload._artNotes=collectArtNotes(); // 外刊笔记一并纳入同步
+    const json=JSON.stringify(payload);
+    const b64=utf8b64(json);
+    const existing=await ghGetFile();
+    const body={message:'考研工作台备份 '+new Date().toLocaleString('zh-CN'), content:b64};
+    if(existing&&existing.sha) body.sha=existing.sha;
+    const r=await fetch(ghUrl(),{method:'PUT',headers:ghHeaders(),body:JSON.stringify(body)});
+    if(!r.ok){ let t=''; try{ t=await r.text(); }catch(_){} throw new Error('GitHub '+r.status+' '+t.slice(0,160)); }
+    g.lastAt=Date.now(); g.msg=''; state._mtime=Date.now(); try{ save('state',state); }catch(_){}
+    if(!silent) toast('✅ 已备份到 GitHub（文字/进度数据已上传，照片仅保存在本机）');
+  }catch(e){ g.msg='上次失败：'+e.message; if(!silent) toast('备份失败：'+e.message); }
+}
+async function ghRestore(){
+  const g=ghCfg();
+  if(!g.token||!g.owner||!g.repo){ toast('请先填 GitHub Token / 用户名 / 仓库名'); return; }
+  toast('🐙 正在从 GitHub 恢复…');
+  try{
+    const f=await ghGetFile();
+    if(!f){ toast('GitHub 仓库里还没有 data.json 备份文件'); return; }
+    const remote=JSON.parse(b64utf8(f.content.replace(/\s/g,'')));
+    if(!remote||typeof remote!=='object') throw new Error('备份文件格式异常');
+    snap();
+    const keepSync=state.sync, keepGh=ghCfg();
+    const merged=mergeForRestore(state, remote);
+    restoreArtNotes(remote._artNotes); // 外刊笔记写回本机
+    if('_artNotes' in merged) delete merged._artNotes;
+    merged.sync=keepSync; merged.gh=keepGh; merged._mtime=Date.now();
+    state=merged; persist();
+    $('#side').innerHTML=renderSide();
+    const main=document.querySelector('#main'); if(main&&current) showModule(current);
+    toast('✅ 已从 GitHub 恢复');
+  }catch(e){ toast('恢复失败：'+e.message); }
+}
+function ghToggle(){
+  const g=ghCfg(); g.on=!g.on; persist();
+  const btn=$('#ghBtn'); if(btn) btn.textContent=g.on?'⏸ 关闭自动备份':'▶ 开启自动备份';
+  const st=$('#ghStatus'); if(st) st.textContent=ghStatusText();
+  if(g.on){ if(!g.token||!g.owner||!g.repo) toast('请先把 Token / 用户名 / 仓库名填全'); else { toast('已开启：每次打卡后 2 秒自动备份到 GitHub'); ghAutoSync(); } }
+}
+function ghStatusText(){
+  const g=ghCfg();
+  if(!g.on) return '未开启。开启后每次修改数据会自动备份到 GitHub。';
+  if(g.msg) return '⚠️ '+g.msg;
+  if(g.lastAt) return '✅ 上次备份 · '+new Date(g.lastAt).toLocaleTimeString('zh-CN');
+  return '🔄 等待首次备份…';
+}
+let ghAutoTimer=null;
+function ghAutoSync(){
+  const g=state.gh;
+  if(!g||!g.on||!g.token||!g.owner||!g.repo) return;
+  if(ghAutoTimer) return;
+  ghAutoTimer=setTimeout(()=>{ ghAutoTimer=null; ghBackup(true); },2000);
 }
 function deepMerge(base, over){
   // 递归合并：over 覆盖 base；对象逐层合并，数组/基本类型直接覆盖
@@ -4721,6 +5400,43 @@ function mergeForRestore(local, remote){
   out.sync=local.sync; // 同步码/开关始终用本机的，避免被覆盖导致同步中断
   return out;
 }
+function mergeArrayByKey(a,b,keyFn){
+  const out=[]; const seen=new Set();
+  [...(a||[]), ...(b||[])].forEach(x=>{
+    if(!x) return;
+    const k=keyFn?keyFn(x):JSON.stringify(x);
+    if(seen.has(k)) return;
+    seen.add(k); out.push(x);
+  });
+  return out;
+}
+function mergePhotoMap(local, remote){
+  const out={}; const dates=new Set([...Object.keys(local||{}), ...Object.keys(remote||{})]);
+  dates.forEach(d=>{
+    out[d]=mergeArrayByKey((remote||{})[d], (local||{})[d], x=>(x.src||'')+'|'+(x.cap||''));
+  });
+  return out;
+}
+function mergeForCloud(local, remote){
+  local=local||{}; remote=remote||{};
+  // newer 版本作为 base，older 作为 other；deepMerge(base, other) → other 覆盖 base
+  // 所以应该是 deepMerge(older, newer) 让 newer 覆盖 older
+  const newer=(remote._mtime||0)>(local._mtime||0)?remote:local;
+  const older=newer===remote?local:remote;
+  const out=deepMerge(deepMerge(DEFAULT_STATE, older), newer);
+  const localDel=local.tasksDeleted||[], remoteDel=remote.tasksDeleted||[];
+  out.tasks=mergeTasks(local.tasks, remote.tasks, localDel, remoteDel);
+  out.tasksDeleted=Array.from(new Set([...localDel, ...remoteDel]));
+  // 月计划：按时间戳合并 + 删除墓碑
+  out.monthPlan=monthPlanMerge(local.monthPlan||[],remote.monthPlan||[],local.monthDeleted||[],remote.monthDeleted||[]);
+  out.monthDeleted=Array.from(new Set([...(local.monthDeleted||[]),...(remote.monthDeleted||[])]));
+  out.checkins=mergePhotoMap(local.checkins, remote.checkins);
+  out.mood=mergeArrayByKey(remote.mood, local.mood);
+  out.mySent=mergeArrayByKey(remote.mySent, local.mySent, x=>(x.s||x.text||JSON.stringify(x)));
+  out.sync=local.sync;
+  out.gh=local.gh;
+  return out;
+}
 function resetDogIfNeeded(){
   const today=todayStr();
   const now=new Date();
@@ -4734,21 +5450,49 @@ function resetDogIfNeeded(){
     persist();
   }
 }
-function pangpangLevel(pct, studyMin){
-  if(pct>=100 || studyMin>=360) return 4;
-  if(pct>=70 || studyMin>=240) return 3;
-  if(pct>=35 || studyMin>=90) return 2;
-  if(pct>0 || studyMin>=25) return 1;
+function pangpangLevel(pct){
+  if(pct>=100) return 4;
+  if(pct>=70) return 3;
+  if(pct>=35) return 2;
+  if(pct>0) return 1;
   return 0;
 }
-function pangpangMessage(pct, studyMin, phase){
-  const lv=pangpangLevel(pct,studyMin);
+const PANGPANG_STAGE_ASSETS=[
+  {label:'趴着等你',idle:'pangpang_stage_0_idle.mp4',tap:'pangpang_stage_0_tap.mp4',advance:'pangpang_stage_0_advance.mp4',fallback:'pangpang_stage_0.mp4'},
+  {label:'歪坐傲娇',idle:'pangpang_stage_1_idle.mp4',tap:'pangpang_stage_1_tap.mp4',advance:'pangpang_stage_1_advance.mp4',fallback:'pangpang_stage_1.mp4'},
+  {label:'认真陪学',idle:'pangpang_stage_2_idle.mp4',tap:'pangpang_stage_2_tap.mp4',advance:'pangpang_stage_2_advance.mp4',fallback:'pangpang_pet_loop.mp4'},
+  {label:'准备站起',idle:'pangpang_stage_3_idle.mp4',tap:'pangpang_stage_3_tap.mp4',advance:'pangpang_stage_3_advance.mp4',fallback:'pangpang_pet_loop.mp4'},
+  {label:'热乎乎满状态',idle:'pangpang_stage_4_idle.mp4',tap:'pangpang_stage_4_tap.mp4',advance:'pangpang_stage_4_advance.mp4',fallback:'pangpang_pet_loop.mp4'}
+];
+function pangpangRestState(now=new Date()){
+  const h=now.getHours();
+  const m=now.getMinutes();
+  const mins=h*60+m;
+  if(mins<7*60) return {type:'sleep', label:'睡觉中', idle:'pangpang_sleep_noon_idle.mp4', tap:'pangpang_sleep_noon_tap.mp4', fallback:'pangpang_pet_loop.mp4', msg:'现在是胖胖夜间睡觉的时间。她会趴着睡,被点到也只是迷迷糊糊抬一下眼。'};
+  if(mins>=12*60 && mins<14*60) return {type:'nap', label:'午睡中', idle:'pangpang_doze_sitting_idle.mp4', tap:'pangpang_doze_sitting_tap.mp4', fallback:'pangpang_pet_loop.mp4', msg:'现在是胖胖午睡时间。她坐着打瞌睡,像上课犯困一样小鸡啄米。'};
+  return null;
+}
+function pangpangStats(){
+  const d=todayStr(); ensureTasks(d);
+  const tasks=state.tasks[d]||[];
+  const done=tasks.filter(t=>t.status==='done').length;
+  const pct=tasks.length?Math.round(done/tasks.length*100):0;
+  const unlocked=Math.min(4, Math.max(done, pangpangLevel(pct)));
+  return {d,tasks,done,pct,unlocked};
+}
+function pangpangMessage(pct, phase){
+  const rest=pangpangRestState();
+  if(rest){
+    const fed=phase>0?` 今天已经收到 ${phase} 个小奖励,醒了会继续陪你。`:'';
+    return rest.msg+fed;
+  }
+  const lv=pangpangLevel(pct);
   const msgs=[
-    '胖胖趴在旁边等你开始。先学 25 分钟,她就轻轻眨眼陪你。',
-    '胖胖已经坐起来啦。你刚开始进入状态,别急,把这一小段学完。',
-    '胖胖在认真看你学习。今天已经有节奏了,再稳稳推进一点。',
-    '胖胖开心地歪头看你。你做得很好,现在适合继续冲一个小目标。',
-    '胖胖满状态陪学中。今天的努力她都看见了,你真的很棒。'
+    '胖胖趴在旁边等你完成第一条任务。完成任务才能喂她哦。',
+    '胖胖已经坐起来啦。完成的任务越多,她越有精神。',
+    '胖胖在认真看你推进任务。再完成几条,她会更开心。',
+    '胖胖开心地歪头看你。今天任务完成度很不错。',
+    '胖胖满状态陪学中。今天完成的任务她都看见了,你真的很棒。'
   ];
   const base=msgs[lv];
   const fed=phase>0?` 已收到 ${phase} 个小奖励。`:'';
@@ -4757,39 +5501,142 @@ function pangpangMessage(pct, studyMin, phase){
 function pangpangSnackName(i){
   return ['一小口鸡胸肉','一颗小饼干','一次摸摸头','一个大大的贴贴'][Math.max(0,Math.min(3,i))];
 }
-function feedDog(){
+let pangpangBusy=false;
+function feedDog(){ pangpangTap(); }
+function pangpangTap(){
   resetDogIfNeeded();
-  const d=todayStr(); ensureTasks(d);
-  const tasks=state.tasks[d]||[];
-  const done=tasks.filter(t=>t.status==='done').length;
-  const pct=tasks.length?Math.round(done/tasks.length*100):0;
-  const studyMin=Math.floor(studyTotalDay(d)/60);
-  const unlocked=Math.min(4, Math.max(done, Math.floor(studyMin/25), pangpangLevel(pct,studyMin)));
+  if(pangpangBusy) return;
+  const st=pangpangStats();
+  const rest=pangpangRestState();
   const phase=state.dog.phase||0;
-  if(phase>=4){ toast('胖胖今天已经被你喂得很开心啦,明天再来。'); return; }
-  if(unlocked<=phase){
-    const needMin=(phase+1)*25-studyMin;
-    toast(needMin>0?`再学习 ${needMin} 分钟,就能给胖胖下一个奖励。`:'再完成一点任务,胖胖就有新奖励。');
+  if(rest){
+    const asset=pangpangRestAsset(rest,phase);
+    pangpangPlayOneShot(asset.tap, asset.idle||asset.fallback, rest.type==='nap'?'胖胖困得点了一下头。':'胖胖迷迷糊糊看了你一眼。');
     return;
   }
-  state.dog.phase=phase+1;
-  state.dog.fed=(state.dog.fed||0)+1;
-  persist();
-  $('#side').innerHTML=renderSide();
-  toast('胖胖收到了'+pangpangSnackName(phase)+'。继续学,她陪着你。');
+  const asset=PANGPANG_STAGE_ASSETS[phase]||PANGPANG_STAGE_ASSETS[0];
+  if(st.unlocked>phase && phase<4){
+    pangpangBusy=true;
+    const newPhase=phase+1;
+    pangpangPlayOneShot(asset.advance, asset.tap||asset.fallback, '', ()=>{
+      state.dog.phase=newPhase;
+      state.dog.fed=(state.dog.fed||0)+1;
+      persist();
+      const newAsset=PANGPANG_STAGE_ASSETS[newPhase]||PANGPANG_STAGE_ASSETS[0];
+      pangpangSetIdle(newAsset.idle, newAsset.fallback||'pangpang_pet_loop.mp4');
+      pangpangUpdateBadge(newPhase);
+      toast('胖胖进入下一个状态啦。继续学,她陪着你。');
+      pangpangBusy=false;
+    });
+    return;
+  }
+  pangpangPlayOneShot(asset.tap, asset.idle||asset.fallback, '');
+  if(phase>=4){ toast('胖胖今天已经满状态陪你啦,明天再继续。'); return; }
+  const needDone=Math.max(1, phase+1-st.done);
+  toast(`胖胖有反应啦。再完成 ${needDone} 条任务,就能进入下个状态。`);
+}
+function pangpangRestAsset(rest,phase){
+  return {
+    idle: rest.idle,
+    tap: rest.tap,
+    fallback: rest.fallback
+  };
+}
+function pangpangSetIdle(src, fallback='pangpang_pet_loop.mp4'){
+  const v=document.getElementById('pangpangIdle');
+  if(!v) return;
+  v.onerror=()=>{
+    v.onerror=null;
+    if(fallback && fallback!==src){ v.src=fallback; v.play().catch(()=>{}); }
+  };
+  if(v.getAttribute('data-src')!==src){
+    v.setAttribute('data-src', src);
+    v.src=src||fallback;
+  }
+  v.loop=true;
+  v.play().catch(()=>{});
+}
+function pangpangPreloadAll(){
+  const all=[];
+  PANGPANG_STAGE_ASSETS.forEach(a=>{ all.push(a.idle,a.tap,a.advance); });
+  all.push('pangpang_sleep_night_idle.mp4','pangpang_sleep_night_tap.mp4','pangpang_sleep_noon_idle.mp4','pangpang_sleep_noon_tap.mp4','pangpang_doze_sitting_idle.mp4','pangpang_doze_sitting_tap.mp4','pangpang_pet_loop.mp4');
+  all.forEach(src=>{
+    if(!src) return;
+    const tmp=document.createElement('video');
+    tmp.src=src; tmp.preload='auto'; tmp.muted=true; tmp.playsInline=true; tmp.load();
+  });
+}
+function pangpangPlayOneShot(src, fallback='pangpang_pet_loop.mp4', msg='', onDone){
+  const v=document.getElementById('pangpangOneShot');
+  if(!v){ if(msg) toast(msg); if(onDone) onDone(); return; }
+  v.onended=null;
+  v.onerror=null;
+  v.loop=false;
+  v.src=src||fallback;
+  v.play().then(()=>{
+    v.classList.add('show');
+  }).catch(()=>{
+    if(fallback && fallback!==src){
+      v.src=fallback;
+      v.play().then(()=>v.classList.add('show')).catch(()=>{});
+    }
+  });
+  if(msg) toast(msg);
+  let called=false;
+  const finish=()=>{
+    if(called) return; called=true;
+    v.classList.remove('show');
+    setTimeout(()=>{
+      v.removeAttribute('src');
+      v.load();
+      if(onDone) onDone();
+    }, 200);
+  };
+  v.onended=finish;
+  setTimeout(finish, 5500);
+}
+function pangpangUpdateBadge(phase){
+  const badge=document.querySelector('.pangpang-badge');
+  const spark=document.querySelector('.pangpang-spark');
+  const rest=pangpangRestState();
+  if(badge){
+    const label=rest?rest.label:(PANGPANG_STAGE_ASSETS[phase]||PANGPANG_STAGE_ASSETS[0]).label;
+    badge.textContent='胖胖 · '+label;
+  }
+  if(spark){
+    spark.textContent=rest?'Zz':(phase>=4?'✨':phase>=2?'♡':'');
+  }
+}
+function pangpangRestoreIdle(){
+  const phase=Math.max(0,Math.min(4,state.dog.phase||0));
+  const rest=pangpangRestState();
+  if(rest){
+    const asset=pangpangRestAsset(rest,phase);
+    pangpangSetIdle(asset.idle, asset.fallback||'pangpang_pet_loop.mp4');
+    return;
+  }
+  const asset=PANGPANG_STAGE_ASSETS[phase]||PANGPANG_STAGE_ASSETS[0];
+  pangpangSetIdle(asset.idle, asset.fallback||'pangpang_pet_loop.mp4');
 }
 function dogSvg(){
   resetDogIfNeeded();
   const phase=Math.max(0,Math.min(4,state.dog.phase||0));
-  const labels=['等你开始','轻轻陪着','认真陪学','开心歪头','满状态'];
-  const spark=phase>=3?'✨':phase>=1?'♡':'';
-  return `<div class="dog" onclick="feedDog()" style="cursor:pointer" title="点我给胖胖小奖励">
-    <div class="pangpang-card">
-      <video src="pangpang_pet_loop.mp4" autoplay muted loop playsinline preload="auto" poster="pangpang_app_icon.jpg"></video>
-      <div class="pangpang-badge">胖胖 · ${labels[phase]}</div>
-      <div class="pangpang-spark">${spark}</div>
+  const asset=PANGPANG_STAGE_ASSETS[phase]||PANGPANG_STAGE_ASSETS[0];
+  const rest=pangpangRestState();
+  const restAsset=rest?pangpangRestAsset(rest,phase):null;
+  const src=restAsset ? restAsset.idle : asset.idle;
+  const fb=(restAsset&&restAsset.fallback)||asset.fallback||'pangpang_pet_loop.mp4';
+  const badge=rest ? rest.label : asset.label;
+  const fallback='pangpang_pet_loop.mp4';
+  const spark=rest ? 'Zz' : (phase>=4?'✨':phase>=2?'♡':'');
+  return `<div class=\"dog\" onclick=\"pangpangTap()\" style=\"cursor:pointer\" title=\"点点胖胖\">
+    <div class=\"pangpang-card phase-${phase}\">
+      <video id=\"pangpangIdle\" class=\"pp-idle\" src=\"${src}\" autoplay muted loop playsinline preload=\"auto\" onerror=\"this.onerror=null;this.src='${fb||fallback}'\"></video>
+      <video id=\"pangpangOneShot\" class=\"pp-oneshot\" src=\"\" muted playsinline preload=\"auto\" onerror=\"this.onerror=null;this.src='${fb||fallback}'\"></video>
+      <div class=\"pangpang-badge\">胖胖 · ${badge}</div>
+      <div class=\"pangpang-spark\">${spark}</div>
     </div>
-    <div style="font-size:12px;color:var(--ink-soft);margin-top:6px">完成任务或学习 25 分钟,就能给胖胖一个小奖励</div>
+    <div style=\"font-size:12px;color:var(--ink-soft);margin-top:6px\">${rest?'睡觉时间也可以完成任务解锁,胖胖醒来继续陪你':'只通过完成学习任务解锁胖胖下一段小动作'}</div>
   </div>`;
 }
 
@@ -4826,6 +5673,7 @@ function setupPWA(){
 
 /* ---------- 启动 ---------- */
 buildNav(); setupPWA(); studyEnsureToday(); studyArchiveIfNewDay();
+try{ pangpangPreloadAll(); }catch(e){}
 // 计时器：每 30s 落盘一次，每分钟检测跨天归档
 setInterval(()=>{ studyFlush(); }, 30000);
 setInterval(()=>{ studyArchiveIfNewDay(); }, 60000);
@@ -4869,6 +5717,23 @@ showModule('home');
   /* ===== 自动更新：比对页面内 APP_VER，发现新版则提示 ===== */
   var m=document.documentElement.outerHTML.match(/APP_VER:([\d.]+)/);
   var CURRENT=m?m[1]:'0';
+  function newer(a,b){
+    var x=String(a||'0').split('.').map(Number), y=String(b||'0').split('.').map(Number);
+    for(var i=0;i<Math.max(x.length,y.length);i++){
+      var xi=x[i]||0, yi=y[i]||0;
+      if(xi>yi) return true;
+      if(xi<yi) return false;
+    }
+    return false;
+  }
+  function swapRemote(html){
+    if(location.protocol==='file:'){
+      html=html.replace(/<head([^>]*)>/i,'<head$1><base href="'+SYNC_BASE+'/">');
+      document.open(); document.write(html); document.close();
+    }else{
+      location.reload(true);
+    }
+  }
   function check(){
     try{
       /* APK(file://)内比对托管版；网页内比对自身地址 */
@@ -4876,22 +5741,13 @@ showModule('home');
       fetch(url,{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){
         var mm=t.match(/APP_VER:([\d.]+)/);
         var remote=mm?mm[1]:null;
-        if(remote && remote!==CURRENT){
-          if(location.protocol==='file:'){
-            /* 原生APK侧载无法静默自更，提示到下载链接重装 */
-            if(window.toast) toast('发现新版本 '+remote+'，请重新安装最新 APK');
-            var tip=document.getElementById('updTip');
-            if(tip){ tip.style.display='block'; tip.textContent='发现新版本 '+remote+'，请重新安装最新 APK'; }
-          } else {
-            location.reload(true);
-          }
-        }
+        if(remote && newer(remote,CURRENT)) swapRemote(t);
       }).catch(function(){});
     }catch(e){}
   }
   try{
     var KEY='__lastUpdChk', now=Date.now(), last=+localStorage.getItem(KEY)||0;
-    if(now-last>5*60*1000){ localStorage.setItem(KEY,now); setTimeout(check,4000); }
+    if(now-last>60*1000){ localStorage.setItem(KEY,now); setTimeout(check,1200); }
   }catch(e){}
 
   /* ===== 帮助浮窗 ===== */

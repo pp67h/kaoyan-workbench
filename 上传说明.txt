@@ -1,19 +1,27 @@
-GitHub Pages 上传步骤:
+GitHub 仓库更新步骤（本次手动上传，以后自动）
 
-1. 打开 github.com 并登录。
-2. 新建仓库,建议名字叫: kaoyan-workbench
-3. 仓库设为 Public。
-4. 把这个文件夹里的所有文件上传到仓库根目录:
-   - index.html
-   - pangpang_pet_loop.mp4
-   - pangpang_app_icon.jpg
-   - .nojekyll
-   - README.md
-5. 进入仓库 Settings → Pages。
-6. Source 选择 Deploy from a branch。
-7. Branch 选择 main / root,点 Save。
-8. 等 1-3 分钟,GitHub 会给一个网址,通常是:
-   https://你的用户名.github.io/kaoyan-workbench/
-9. 把这个网址发给我,我就能给你打“云更新版 APK”。
+══════════════════════════════════════════════
+仓库地址：github.com/pp67h/kaoyan-workbench
+══════════════════════════════════════════════
 
-以后你让我改功能,我只改这个仓库里的网页文件。你手机和平板不用重新下载 App,彻底关闭再打开即可更新。
+【本次操作】把压缩包里的所有文件上传到仓库根目录，覆盖旧文件。
+
+1. 打开 github.com，登录你的账号（pp67h）
+2. 进入仓库 kaoyan-workbench
+3. 点击 "Add file" → "Upload files"
+4. 把压缩包解压后的所有文件拖进去（包括 .nojekyll）
+5. 如果有同名文件，选择 "Replace" 覆盖
+6. 底部填写 commit message：如 "更新到最新版"
+7. 点 "Commit changes" 提交
+8. 等 1-2 分钟，GitHub Pages 会自动更新
+9. 访问 https://pp67h.github.io/kaoyan-workbench/ 确认更新生效
+
+【以后的操作】
+以后每次我修改了功能，我会直接通过 GitHub API 更新仓库里的文件，
+你不需要再手动上传，只需彻底关闭 App 再打开即可自动更新。
+
+【文件说明】
+- index.html        → 主程序（所有功能都在这一个文件里）
+- *.mp4             → 胖胖动画视频
+- pangpang_app_icon.jpg → App 图标
+- .nojekyll         → 告诉 GitHub 不要跳过 _ 开头的文件
