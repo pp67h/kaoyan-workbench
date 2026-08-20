@@ -1,13 +1,13 @@
 {
-  "version": "v30",
+  "version": "v31",
   "date": "2026-08-20",
-  "size": "约 42MB",
-  "apk": "https://github.com/pp67h/kaoyan-workbench/releases/download/v30/kaoyan-workbench-v30.apk",
+  "size": "约 40MB",
+  "apk": "https://github.com/pp67h/kaoyan-workbench/releases/download/v31/kaoyan-workbench-v31.apk",
   "changelog": [
-    "GitHub 自动备份 + 一键恢复，数据更安全",
-    "胖胖动画全阶段（待机 / 点击 / 睡觉，点胖胖有反应）",
-    "奶油黄暖色系 + 倒计时亮红配色",
-    "手机 / 平板自适应布局，卡片标题单行",
-    "拍照 / 相册图标一行，备份导出到 Download/Android/trae"
+    "🆕 一键自动更新：v31 起，云同步页点「🔄 一键更新」→ 自动后台下载 → 自动弹出安装，全程不用浏览器",
+    "⚠️ 旧版（v30 及以前）没有自动安装能力且换了新签名：先 GitHub 备份 → 卸载旧版 → 装 v31 → 恢复数据；仅此一次，之后永远一键更新",
+    "每日学习时间卡片：前一天 / 今天 / 后一天 三个键分列左·中·右，累计时长单独一行",
+    "每日任务卡片：标题独占一行不再被挤掉，日期导航左·中·右排布",
+    "英语 / 政治计数器：一排放不下不再硬挤，自动换到第二排且靠左对齐"
   ]
 }
