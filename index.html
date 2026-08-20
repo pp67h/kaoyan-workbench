@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.8.21.6-->
+<!--APP_VER:2026.8.21.7-->
 <style>
 :root{
   --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
@@ -22,21 +22,21 @@
   --ink-soft:#9a8a6a;/* 暖灰棕 · 辅助文字 */
   --line:#F0DCA0;    /* 暖金边框 */
   --shadow:0 6px 18px rgba(180,150,80,.12);
-  /* 人民币配色：明亮暖调，与米黄背景融为一体 */
-  --c-home:#e85d4a;   /* 100元红 · 明亮暖珊瑚 */
-  --c-cal:#e8745a;    /* 日历 · 暖橙红 */
-  --c-task:#36b87c;   /* 50元绿 · 鲜活暖绿 */
-  --c-know:#f0a830;   /* 20元金 · 明亮暖金 */
-  --c-pol:#d4503a;    /* 政治 · 明亮暖红 */
-  --c-eng:#a056b6;    /* 5元紫 · 明亮暖紫 */
-  --c-word:#2db89a;   /* 青绿 · 明亮鲜活 */
-  --c-art:#e8645a;    /* 外刊 · 暖珊瑚 */
-  --c-sent:#8a72b6;   /* 长难句 · 暖紫（不用蓝） */
-  --c-school:#d4a430; /* 金 · 明亮暖调 */
-  --c-mood:#c0a5dc;   /* 柔紫 · 明亮不刺眼 */
-  --c-fun:#e89030;    /* 橙 · 明亮暖调 */
-  --c-cloud:#d49530;  /* 云同步 · 暖琥珀（不用蓝） */
-  --c-prog:#c89030;   /* 进度概览 · 暖金（不用蓝） */
+  /* 暖调配色：奶油黄 × 抹茶绿 × 蜂蜜金 × 陶土 —— 全部暖色，无蓝无紫 */
+  --c-home:#c96f4a;   /* 考研倒计时 · 陶土 */
+  --c-cal:#8fa96a;    /* 月度规划 · 抹茶绿 */
+  --c-task:#6da06f;   /* 每日打卡 · 柔绿 */
+  --c-know:#d9a441;   /* 心理 · 蜂蜜金 */
+  --c-pol:#c05b3e;    /* 政治 · 暖陶红 */
+  --c-eng:#8a9a52;    /* 英语 · 橄榄绿 */
+  --c-word:#5a9e7e;   /* 阅读生词 · 翡翠绿 */
+  --c-art:#cf8a4a;    /* 英文外刊 · 焦糖 */
+  --c-sent:#a08750;   /* 长难句 · 古铜 */
+  --c-school:#c9973b; /* 目标院校 · 金 */
+  --c-mood:#c4948a;   /* 情绪树洞 · 暖豆沙 */
+  --c-fun:#d98a3e;    /* 娱乐区 · 暖橙 */
+  --c-cloud:#9a8b5e;  /* 云同步 · 橄榄金 */
+  --c-prog:#8fa96a;   /* 进度概览 · 抹茶绿 */
   --r:18px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -58,10 +58,10 @@ input,textarea,select{font-family:inherit;font-size:15px}
 ::-webkit-scrollbar-thumb{background:#E8D080;border-radius:8px}
 
 /* ===== 布局：三栏（平板优先） ===== */
-#app{display:flex;gap:14px;max-width:1320px;margin:0 auto;padding:14px}
+#app{display:flex;gap:14px;max-width:1320px;margin:0 auto;padding:clamp(10px,2vw,16px)}
 #nav{width:212px;flex:0 0 212px}
-#main{flex:1 1 auto;min-width:0}
-#side{width:300px;flex:0 0 300px}
+#main{flex:1 1 auto;min-width:0;max-width:100%}
+#side{width:300px;flex:0 0 300px;min-width:0}
 @media(max-width:1080px){
   #app{flex-direction:column}
   #nav{display:none}
@@ -70,6 +70,19 @@ input,textarea,select{font-family:inherit;font-size:15px}
   #bottombar{display:flex}
 }
 @media(min-width:1081px){#bottombar{display:none}}
+/* 中等平板：三栏收窄，避免挤压 */
+@media(min-width:1081px) and (max-width:1280px){
+  #app{gap:12px}
+  #nav{width:184px;flex:0 0 184px}
+  #side{width:258px;flex:0 0 258px}
+}
+/* 手机：卡片/行内元素收紧，禁止横向溢出 */
+@media(max-width:480px){
+  #app{gap:10px;padding:10px}
+  .panel{padding:13px;border-radius:15px}
+  .row{flex-wrap:wrap}
+  .spread{flex-wrap:wrap;gap:4px}
+}
 
 /* ===== 左侧导航 ===== */
 .brand{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);
@@ -83,17 +96,17 @@ input,textarea,select{font-family:inherit;font-size:15px}
   color:var(--ink);font-size:14px;width:100%;text-align:left;transition:.15s;margin:2px 0}
 .navitem .ico{width:26px;height:26px;display:grid;place-items:center;border-radius:8px;font-size:15px;flex:0 0 26px}
 .navitem:active{transform:scale(.97)}
-.navitem.active{background:var(--paper);font-weight:700;box-shadow:inset 0 0 0 2px var(--accent,#e85d4a)}
-.navitem.active .ico{background:var(--accent,#e85d4a);color:#fff}
+.navitem.active{background:var(--paper);font-weight:700;box-shadow:inset 0 0 0 2px var(--accent,#8fa96a)}
+.navitem.active .ico{background:var(--accent,#8fa96a);color:#fff}
 
 /* ===== 卡片通用 ===== */
 .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
   padding:16px;box-shadow:var(--shadow);margin-bottom:14px}
 .panel h2{margin:0 0 4px;font-size:18px;display:flex;align-items:center;gap:8px}
-.panel h3{margin:14px 0 8px;font-size:15px;color:var(--accent,#e85d4a)}
+.panel h3{margin:14px 0 8px;font-size:15px;color:var(--accent,#c96f4a)}
 .sub{color:var(--ink-soft);font-size:12px;margin-bottom:10px}
 .tag{display:inline-block;font-size:11px;padding:2px 9px;border-radius:20px;background:var(--paper);color:var(--ink-soft);margin:2px}
-.btn{background:var(--accent,#e85d4a);color:#fff;padding:9px 14px;border-radius:12px;font-size:14px;
+.btn{background:var(--accent,#c96f4a);color:#fff;padding:9px 14px;border-radius:12px;font-size:14px;
   font-weight:600;box-shadow:0 3px 0 rgba(0,0,0,.08);transition:.12s}
 .btn:active{transform:translateY(2px);box-shadow:none}
 .btn.ghost{background:var(--paper);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--line)}
@@ -106,7 +119,7 @@ input,textarea,select{font-family:inherit;font-size:15px}
 hr{border:none;border-top:1px dashed var(--line);margin:12px 0}
 input[type=text],input[type=number],textarea,select{width:100%;border:1.5px solid var(--line);
   border-radius:10px;padding:9px 11px;background:var(--paper2);color:var(--ink);outline:none}
-input:focus,textarea:focus,select:focus{border-color:var(--accent,#e85d4a)}
+input:focus,textarea:focus,select:focus{border-color:var(--accent,#c96f4a)}
 textarea{resize:vertical;min-height:60px}
 label.f{font-size:12px;color:var(--ink-soft);display:block;margin:8px 0 3px}
 
@@ -127,8 +140,8 @@ label.f{font-size:12px;color:var(--ink-soft);display:block;margin:8px 0 3px}
 #bottombar .navitem .ico{width:30px;height:30px;font-size:20px;flex:0 0 30px;line-height:30px;
   background:var(--paper);display:block;border-radius:9px;text-align:center}
 #bottombar .navitem span.lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;text-align:center;display:block}
-#bottombar .navitem.active{background:var(--paper);font-weight:700;color:var(--accent,#e85d4a)}
-#bottombar .navitem.active .ico{background:var(--accent,#e85d4a);color:#fff}
+#bottombar .navitem.active{background:var(--paper);font-weight:700;color:var(--accent,#c96f4a)}
+#bottombar .navitem.active .ico{background:var(--accent,#c96f4a);color:#fff}
 #bottombar .navitem.more{color:var(--ink-soft)}
 body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 
@@ -162,34 +175,35 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 .hero .date{font-size:13px;opacity:.9}
 
 /* ===== 日历 ===== */
-.cal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.cal-head h2{font-size:18px;font-weight:600;color:#8B5A3A;letter-spacing:.5px}
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
-.cal-dow{text-align:center;font-size:12px;color:#BC8F6B;padding:4px 0;font-weight:450}
-.cal-cell{aspect-ratio:1/1;border-radius:12px;background:#F8FAF5;border:1px solid transparent;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:13px;position:relative;padding:2px;min-height:44px;
+.cal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px}
+.cal-head h2{font-size:clamp(15px,2.4vw,18px);font-weight:600;color:var(--ink);letter-spacing:.5px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:clamp(3px,1vw,7px)}
+.cal-dow{text-align:center;font-size:clamp(10px,1.6vw,12px);color:var(--ink-soft);padding:4px 0;font-weight:450}
+.cal-cell{aspect-ratio:1/1;border-radius:clamp(9px,1.6vw,14px);background:var(--paper);border:1px solid transparent;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:13px;position:relative;padding:1px;
+  min-height:clamp(36px,7.5vw,56px);min-width:0;overflow:hidden;
   transition:0.15s ease}
-.cal-cell .cal-date{font-size:11px;color:#C9B8A8;line-height:1.2;margin-bottom:1px}
-.cal-cell .cal-hours{font-size:13px;font-weight:550;color:#8FAF7A;line-height:1.2}
-.cal-cell.today{border:2px solid #A8D08D;background:#F4F9EE;box-shadow:0 0 0 2px var(--card)}
-.cal-cell.today .cal-date,.cal-cell.today .cal-hours{color:#6E8F5A}
-.cal-cell.mile{box-shadow:inset 0 0 0 2px #DCEAD0}
-.cal-cell .dot{width:6px;height:6px;border-radius:50%;background:#DCEAD0;position:absolute;bottom:5px}
-.cal-cell .mdot{width:6px;height:6px;border-radius:50%;background:#A8D08D;position:absolute;bottom:5px;right:6px}
-.cal-cell .tdt{width:7px;height:7px;border-radius:50%;background:#C5DFB3;position:absolute;top:5px;left:5px;border:1.5px solid #fff}
+.cal-cell .cal-date{font-size:clamp(10px,1.7vw,12px);color:#c2b090;line-height:1.2;margin-bottom:1px}
+.cal-cell .cal-hours{font-size:clamp(11px,1.8vw,13px);font-weight:550;color:#8fa96a;line-height:1.2}
+.cal-cell.today{border:2px solid #8fa96a;background:#f3f5e4;box-shadow:0 0 0 2px var(--card)}
+.cal-cell.today .cal-date,.cal-cell.today .cal-hours{color:#6a7f45;font-weight:650}
+.cal-cell.mile{box-shadow:inset 0 0 0 2px #d8e8be}
+.cal-cell .dot{width:6px;height:6px;border-radius:50%;background:#d8e8be;position:absolute;bottom:5px}
+.cal-cell .mdot{width:6px;height:6px;border-radius:50%;background:#a0cb88;position:absolute;bottom:5px;right:6px}
+.cal-cell .tdt{width:7px;height:7px;border-radius:50%;background:#d9a441;position:absolute;top:5px;left:5px;border:1.5px solid var(--card)}
 .cal-cell.dim{opacity:.35}
-/* 抹茶色阶热力图 */
-.cal-cell.heat-0{background:#F8FAF5}
-.cal-cell.heat-0 .cal-hours{color:#B8C9A8}
-.cal-cell.heat-1{background:#EEF5E8}
-.cal-cell.heat-1 .cal-hours{color:#8FAF7A}
-.cal-cell.heat-2{background:#DCEAD0}
-.cal-cell.heat-2 .cal-hours{color:#6E8F5A}
-.cal-cell.heat-3{background:#C5DFB3}
-.cal-cell.heat-3 .cal-hours{color:#4A6B3A}
-.cal-cell.heat-4{background:#A8D08D}
+/* 暖抹茶热力色阶（奶油底 → 深抹茶） */
+.cal-cell.heat-0{background:#f7edd0}
+.cal-cell.heat-0 .cal-hours{color:#b3a678}
+.cal-cell.heat-1{background:#ecf0d2}
+.cal-cell.heat-1 .cal-hours{color:#8a9a52}
+.cal-cell.heat-2{background:#d8e8be}
+.cal-cell.heat-2 .cal-hours{color:#6a7f45}
+.cal-cell.heat-3{background:#bedba4}
+.cal-cell.heat-3 .cal-hours{color:#4a6b3a}
+.cal-cell.heat-4{background:#a0cb88}
 .cal-cell.heat-4 .cal-hours{color:#fff}
-.cal-cell.heat-4 .cal-date{color:#F0F7E8}
+.cal-cell.heat-4 .cal-date{color:#f2f7e6}
 
 /* ===== 任务 ===== */
 .task{border:1.5px solid var(--line);border-radius:14px;padding:11px 12px;margin:8px 0;background:var(--paper2);
@@ -245,11 +259,11 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 .kc b{color:var(--c-know)}
 .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 .tab{padding:6px 13px;border-radius:20px;background:var(--paper);font-size:13px;border:1px solid var(--line)}
-.tab.on{background:var(--accent,#e85d4a);color:#fff;border-color:var(--accent,#e85d4a)}
+.tab.on{background:var(--accent,#c96f4a);color:#fff;border-color:var(--accent,#c96f4a)}
 
 /* ===== 进度条 ===== */
 .bar{height:11px;background:var(--paper);border-radius:20px;overflow:hidden;border:1px solid var(--line)}
-.bar > i{display:block;height:100%;border-radius:20px;background:var(--accent,#e85d4a);transition:.4s}
+.bar > i{display:block;height:100%;border-radius:20px;background:var(--accent,#c96f4a);transition:.4s}
 .bar2{height:8px;background:var(--paper);border-radius:20px;overflow:hidden;border:1px solid var(--line)}
 .bar2 > i{display:block;height:100%;border-radius:20px;background:var(--c-word)}
 
@@ -367,16 +381,16 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 .mc-add.on{background:var(--c-task)}
 .mc-add.done{background:#bbb;cursor:default}
 .match-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding-top:8px;border-top:1px dashed var(--line)}
-.mp-task{margin:8px 0;padding:10px 12px;border:none;border-bottom:1px dashed #F0E5D8;border-radius:0;background:transparent}
-.mp-row{display:flex;justify-content:space-between;align-items:center;font-size:13px}
-.mp-row b{font-size:13px;color:#6E8F5A}
-.mp-row .muted{color:#BC8F6B}
-.mp-task input[type=checkbox]{width:18px;height:18px;border:2px solid #DCEAD0;border-radius:6px;background:#F8FAF5;flex-shrink:0;accent-color:#A8D08D}
-.mp-task .btn.ghost.xs{border:1px solid #DCEAD0;background:#F8FAF5;color:#6E8F5A}
-.bar{height:8px;border-radius:20px;background:#EEE8DD;overflow:hidden;margin:6px 0}
-.bar i{display:block;height:100%;background:linear-gradient(90deg,#DCEAD0,#A8D08D);border-radius:20px;transition:width .25s}
-.bar2{height:8px;background:#EEE8DD;border-radius:20px;overflow:hidden}
-.bar2 > i{display:block;height:100%;border-radius:20px;background:linear-gradient(90deg,#C5DFB3,#A8D08D)}
+.mp-task{margin:8px 0;padding:10px 6px;border:none;border-bottom:1px dashed #efe0c0;border-radius:0;background:transparent}
+.mp-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;gap:6px;flex-wrap:wrap}
+.mp-row b{font-size:13px;color:var(--ink)}
+.mp-row .muted{color:var(--ink-soft)}
+.mp-task input[type=checkbox]{width:18px;height:18px;border:2px solid #d8e8be;border-radius:6px;background:var(--card);flex-shrink:0;accent-color:#8fa96a}
+.mp-task .btn.ghost.xs{border:1px solid #e8d8b0;background:var(--paper);color:#8a9a52}
+.bar{height:8px;border-radius:20px;background:var(--paper);overflow:hidden;margin:6px 0}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,#d8e8be,#8fa96a);border-radius:20px;transition:width .25s}
+.bar2{height:8px;background:var(--paper);border-radius:20px;overflow:hidden}
+.bar2 > i{display:block;height:100%;border-radius:20px;background:linear-gradient(90deg,#bedba4,#8fa96a)}
 .flip-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .flip{perspective:600px;aspect-ratio:1/1}
 .flip i{display:block;width:100%;height:100%;border-radius:12px;transform-style:preserve-3d;transition:.4s;
@@ -394,7 +408,7 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 .modal-mask{position:fixed;inset:0;background:rgba(40,35,30,.45);z-index:60;display:none;align-items:center;justify-content:center;padding:16px}
 .modal-mask.show{display:flex}
 .modal{background:var(--card);border-radius:20px;max-width:560px;width:100%;max-height:88vh;overflow:auto;padding:18px;box-shadow:var(--shadow)}
-.pill{font-size:11px;padding:2px 9px;border-radius:20px;background:var(--accent,#e85d4a);color:#fff}
+.pill{font-size:11px;padding:2px 9px;border-radius:20px;background:var(--accent,#c96f4a);color:#fff}
 .stat-mini{display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px dashed var(--line)}
 .stat-mini:last-child{border:none}
 .prog-row{margin:12px 0;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
@@ -419,7 +433,7 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 <style>
 #hbFab{position:fixed;right:14px;bottom:18px;z-index:60;width:50px;height:50px;border-radius:50%;
   background:var(--c-home);color:#fff;font-size:23px;display:grid;place-items:center;
-  box-shadow:0 4px 14px rgba(232,93,74,.35);cursor:pointer;-webkit-tap-highlight-color:transparent}
+  box-shadow:0 4px 14px rgba(201,111,74,.4);cursor:pointer;-webkit-tap-highlight-color:transparent}
 #hbFab:active{transform:scale(.94)}
 @media(max-width:1080px){#hbFab{bottom:calc(78px + env(safe-area-inset-bottom))}}
 #hbMask{position:fixed;inset:0;z-index:90;background:rgba(20,15,5,.5);display:none;
@@ -431,7 +445,7 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 @media(min-width:1081px){#hbMask{align-items:center}#hbBox{border-radius:18px}}
 #hbBox h2{font-size:20px;margin:0 0 4px;color:#5a4708;display:flex;align-items:center;gap:8px}
 #hbBox .sub{font-size:12.5px;color:#8a7d6a;margin-bottom:8px}
-#hbBox h3{font-size:15px;margin:18px 0 6px;color:#e85d4a}
+#hbBox h3{font-size:15px;margin:18px 0 6px;color:#c96f4a}
 #hbBox .step{display:flex;gap:10px;margin:11px 0;align-items:flex-start}
 #hbBox .step .n{flex:0 0 24px;width:24px;height:24px;border-radius:50%;background:#ffd54f;
   color:#5a4708;display:grid;place-items:center;font-weight:700;font-size:13px}
@@ -543,7 +557,7 @@ const MODULES = [
 ];
 
 const SUBJ_COLOR = {
-  '英语':'#a056b6','政治':'#d4503a','专业课':'#e8a08c','生活':'#b8a078','其他':'#2db89a'
+  '英语':'#8a9a52','政治':'#c05b3e','专业课':'#c9973b','生活':'#b8a078','其他':'#5a9e7e'
 };
 
 /* 每日固定作息（用于自动生成任务） */
@@ -1068,47 +1082,47 @@ function resetKeyDates(){ state.keyDates=[]; persist(); renderHome($('#main')); 
 function renderCal(main){
   const d=new Date('2026-08-01');
   const weeks=getWeeks(2026,8,10);
-  let html=`<div class="panel" style="background:#FFFDF7;border-radius:32px;padding:28px 24px;box-shadow:0 12px 40px rgba(180,140,100,.12);border:1px solid #F5E6D3"><div class="cal-head">
+  let html=`<div class="panel" style="border-radius:clamp(18px,3vw,28px);padding:clamp(14px,3vw,26px)"><div class="cal-head">
     <button class="btn ghost sm" onclick="shiftMonth(-1)">‹ 上月</button>
     <h2 style="margin:0">📅 2026年8月–12月 规划</h2>
     <button class="btn ghost sm" onclick="calJumpToday()">今天</button>
     <button class="btn ghost sm" onclick="shiftMonth(1)">下月 ›</button></div>
-    <div class="sub" style="color:#BC8F6B">点日期进入当天「每日打卡」；长按日期写日记 / 标记里程碑</div>
+    <div class="sub">点日期进入当天「每日打卡」；长按日期写日记 / 标记里程碑</div>
     <div class="cal-grid" id="calGrid"></div>
-    <div class="row" style="margin-top:12px;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-      <span style="font-size:13px;color:#8B6B55">学习时长</span>
-      <span style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:20px;border-radius:6px;background:#F8FAF5;border:1px solid #EEE5D8"></span><span style="font-size:13px;color:#8B6B55">0-2h</span></span>
-      <span style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:20px;border-radius:6px;background:#EEF5E8"></span><span style="font-size:13px;color:#8B6B55">2-4h</span></span>
-      <span style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:20px;border-radius:6px;background:#DCEAD0"></span><span style="font-size:13px;color:#8B6B55">4-6h</span></span>
-      <span style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:20px;border-radius:6px;background:#C5DFB3"></span><span style="font-size:13px;color:#8B6B55">6-8h</span></span>
-      <span style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:20px;border-radius:6px;background:#A8D08D"></span><span style="font-size:13px;color:#8B6B55">≥8h</span></span>
+    <div class="row" style="margin-top:12px;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+      <span style="font-size:12px;color:var(--ink-soft)">学习时长</span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:18px;height:18px;border-radius:6px;background:#f7edd0;border:1px solid var(--line)"></span><span style="font-size:12px;color:var(--ink-soft)">0-2h</span></span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:18px;height:18px;border-radius:6px;background:#ecf0d2"></span><span style="font-size:12px;color:var(--ink-soft)">2-4h</span></span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:18px;height:18px;border-radius:6px;background:#d8e8be"></span><span style="font-size:12px;color:var(--ink-soft)">4-6h</span></span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:18px;height:18px;border-radius:6px;background:#bedba4"></span><span style="font-size:12px;color:var(--ink-soft)">6-8h</span></span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:18px;height:18px;border-radius:6px;background:#a0cb88"></span><span style="font-size:12px;color:var(--ink-soft)">≥8h</span></span>
     </div>
-    <div style="margin-top:16px;border-top:1px solid #F0E3D6;padding-top:20px">
-      <div class="spread"><h3 style="margin:0;color:#8B5A3A;font-size:16px;font-weight:600">🗓️ 月计划（${calMonth}月）</h3><span style="font-size:12px;color:#BC8F6B">和周计划在一起 · 不另开卡片</span></div>
-      <div class="sub" style="margin-top:4px;color:#BC8F6B">本月要拿下的几个大目标（与周计划互补，逐月填写）</div>
+    <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:14px">
+      <div class="spread"><h3 style="margin:0;font-size:clamp(14px,2.2vw,16px);font-weight:600">🗓️ 月计划（${calMonth}月）</h3><span class="muted" style="font-size:12px">和周计划在一起 · 不另开卡片</span></div>
+      <div class="sub" style="margin-top:4px">本月要拿下的几个大目标（与周计划互补，逐月填写）</div>
       <div id="monthList"></div>
       <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">
         <input type="text" id="mPlanIn" placeholder="任务名，如：发展心理学一轮过完" style="flex:2;min-width:140px">
         <input type="number" id="mPlanTotal" min="0" placeholder="总量" style="width:70px" title="该任务的总量">
         <input type="text" id="mPlanUnit" placeholder="单位" style="width:60px" title="单位，如 页 / 章 / 个 / 篇">
-        <button class="btn sm" style="background:#6E8F5A" onclick="monthAdd()">添加</button>
+        <button class="btn sm" style="background:var(--c-cal)" onclick="monthAdd()">添加</button>
       </div>
       <div class="row" style="margin-top:6px;gap:8px;align-items:center">
-        <span style="font-size:12px;white-space:nowrap;color:#BC8F6B">🔗 关联进度：</span>
-        <select id="mPlanLink" style="flex:1;min-width:140px;padding:4px 6px;border:1px solid #F0E3D6;border-radius:6px;font-size:13px">
+        <span style="font-size:12px;white-space:nowrap" class="muted">🔗 关联进度：</span>
+        <select id="mPlanLink" style="flex:1;min-width:140px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;font-size:13px">
           <option value="">不关联（独立任务）</option>
           ${progressLinkOptions().map(o=>`<option value="${o.link}">${o.label}（${o.cur}/${o.total}）</option>`).join('')}
         </select>
       </div>
     </div>
   </div>
-    <div class="panel" style="background:#FFFDF7;border-radius:32px;padding:28px 24px;box-shadow:0 12px 40px rgba(180,140,100,.12);border:1px solid #F5E6D3">
-      <div class="spread"><h3 style="margin:0;color:#8B5A3A;font-size:16px;font-weight:600">🗓️ 周计划（持续到 12.21 考研）</h3><span style="font-size:12px;color:#BC8F6B">当周自动定位 · ‹/› 切换查看与追加 · 数据持久化</span></div>
-      <div class="sub" style="color:#BC8F6B">每周完成什么内容？用下方 ‹上周 / 下周› 切换周次；默认停在当周</div>
+    <div class="panel" style="border-radius:clamp(18px,3vw,28px);padding:clamp(14px,3vw,26px)">
+      <div class="spread"><h3 style="margin:0;font-size:clamp(14px,2.2vw,16px);font-weight:600">🗓️ 周计划（持续到 12.21 考研）</h3><span class="muted" style="font-size:12px">当周自动定位 · ‹/› 切换查看与追加 · 数据持久化</span></div>
+      <div class="sub">每周完成什么内容？用下方 ‹上周 / 下周› 切换周次；默认停在当周</div>
       <div id="weekList"></div>
       <div class="row" style="margin-top:10px">
         <input type="text" id="wkAdd" placeholder="快捷添加：自动归入当周（也可在周次下方逐周添加）">
-        <button class="btn sm" style="background:#6E8F5A" onclick="weekAdd()">添加</button>
+        <button class="btn sm" style="background:var(--c-cal)" onclick="weekAdd()">添加</button>
       </div>
     </div>`;
   main.innerHTML=html;
@@ -1213,7 +1227,7 @@ function renderMonthList(){
     const cur=Math.max(0,Math.min(tot,Number(it.cur)||0));
     const pct=tot?Math.round(cur/tot*100):0;
     const unit=it.unit||'页';
-    const linkBadge=it.link?'<span class="chip" style="font-size:10px;background:#DCEAD0;color:#4A6B3A;padding:1px 6px;border-radius:8px;border:none">🔗 已关联进度</span>':'';
+    const linkBadge=it.link?'<span class="chip" style="font-size:10px;background:#d8e8be;color:#4a6b3a;padding:1px 6px;border-radius:8px;border:none">🔗 已关联进度</span>':'';
     const progUi=`
       <div class="mp-row" style="margin-top:6px"><span class="muted">进度 ${cur} / ${tot} ${unit}</span><b>${pct}%</b></div>
       <div class="bar"><i style="width:${pct}%"></i></div>
@@ -1536,7 +1550,7 @@ function studyHeatGrade(sec){
 // 按当天学习时长返回热力背景色（旧接口保留，用于非网格场景）
 function studyHeat(sec){
   const grade=studyHeatGrade(sec);
-  const colors=['','rgba(238,245,232,0.7)','rgba(220,234,208,0.8)','rgba(197,223,179,0.85)','rgba(168,208,141,0.9)'];
+  const colors=['','rgba(236,240,210,0.75)','rgba(216,232,190,0.8)','rgba(190,219,164,0.85)','rgba(160,203,136,0.9)'];
   return grade>=0&&grade<colors.length?colors[grade]:'';
 }
 function drawCalendar(month){
@@ -1556,7 +1570,7 @@ function drawCalendar(month){
     let extra='';
     if(state.calMile[ds]) extra+='<span class="mdot"></span>';
     const st=state.calStat[ds];
-    if(st&&st.plan>0) extra+=`<span class="dot" style="background:${st.done/st.plan>=0.8?'#A8D08D':'#C5DFB3'}"></span>`;
+    if(st&&st.plan>0) extra+=`<span class="dot" style="background:${st.done/st.plan>=0.8?'#a0cb88':'#d8e8be'}"></span>`;
     if(state.tasks[ds]&&state.tasks[ds].length) extra+='<span class="tdt" title="有任务"></span>';
     // 抹茶热力等级
     const sec=studyTotalDay(ds);
