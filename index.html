@@ -2787,10 +2787,11 @@ function renderEng(main){
   let html=`<div class="panel"><div class="spread"><h2>🔤 英语专区</h2><span class="pill">${ph}</span></div>
     <div style="margin:8px 0 4px">
       <div class="subj-card">
-        <div class="nm">📚 单词 <span class="muted" style="font-weight:400;font-size:12px">共 ${w.total} 词</span>
+        <div class="nm"><span>📚 单词 <span class="muted" style="font-weight:400;font-size:12px">共 ${w.total} 词</span></span>
+          <span class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto">
           <span class="stepper"><button onclick="vocabStep('y1',-1)">−</button><b>一刷 ${w.y1}</b><button onclick="vocabStep('y1',1)">+</button></span>
           <span class="stepper"><button onclick="vocabStep('y2',-1)">−</button><b>二刷 ${w.y2}</b><button onclick="vocabStep('y2',1)">+</button></span>
-          <span class="stepper"><button onclick="vocabStep('y3',-1)">−</button><b>三刷 ${w.y3}</b><button onclick="vocabStep('y3',1)">+</button></span></div>
+          <span class="stepper"><button onclick="vocabStep('y3',-1)">−</button><b>三刷 ${w.y3}</b><button onclick="vocabStep('y3',1)">+</button></span></span></div>
         <div class="bar" style="--accent:var(--c-eng);margin-top:4px"><i style="width:${p1}%"></i></div>
         <div class="muted" style="font-size:11px;margin:2px 0">一刷 ${p1}%</div>
         <div class="bar2"><i style="width:${p2}%"></i></div>
@@ -2814,9 +2815,10 @@ function renderEng(main){
   types.forEach(tp=>{
     const o=e[tp]; const p1=Math.round(o.y1/o.total*100), p2=Math.round(o.y2/o.total*100);
     html+=`<div class="subj-card">
-      <div class="nm">${tp} <span class="muted" style="font-weight:400;font-size:12px">共 ${o.total} 篇</span>
+      <div class="nm"><span>${tp} <span class="muted" style="font-weight:400;font-size:12px">共 ${o.total} 篇</span></span>
+        <span class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto">
         <span class="stepper"><button onclick="engStep('${tp}',1,-1)">−</button><b>一刷 ${o.y1}</b><button onclick="engStep('${tp}',1,1)">+</button></span>
-        <span class="stepper"><button onclick="engStep('${tp}',2,-1)">−</button><b>二刷 ${o.y2}</b><button onclick="engStep('${tp}',2,1)">+</button></span></div>
+        <span class="stepper"><button onclick="engStep('${tp}',2,-1)">−</button><b>二刷 ${o.y2}</b><button onclick="engStep('${tp}',2,1)">+</button></span></span></div>
       <div class="bar" style="--accent:var(--c-eng);margin-top:6px"><i style="width:${p1}%"></i></div>
       <div class="muted" style="font-size:11px;margin:2px 0">一刷 ${p1}%</div>
       <div class="bar2"><i style="width:${p2}%"></i></div>
