@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.8.21.7-->
+<!--APP_VER:2026.8.21.8-->
 <style>
 :root{
   --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
@@ -22,8 +22,8 @@
   --ink-soft:#9a8a6a;/* 暖灰棕 · 辅助文字 */
   --line:#F0DCA0;    /* 暖金边框 */
   --shadow:0 6px 18px rgba(180,150,80,.12);
-  /* 暖调配色：奶油黄 × 抹茶绿 × 蜂蜜金 × 陶土 —— 全部暖色，无蓝无紫 */
-  --c-home:#c96f4a;   /* 考研倒计时 · 陶土 */
+  /* 暖调配色：奶油黄 × 抹茶绿 × 蜂蜜金 · 倒计时保留亮红（有希望感） */
+  --c-home:#e85d4a;   /* 考研倒计时 · 亮珊瑚红（用户偏爱原版） */
   --c-cal:#8fa96a;    /* 月度规划 · 抹茶绿 */
   --c-task:#6da06f;   /* 每日打卡 · 柔绿 */
   --c-know:#d9a441;   /* 心理 · 蜂蜜金 */
@@ -86,10 +86,11 @@ input,textarea,select{font-family:inherit;font-size:15px}
 
 /* ===== 左侧导航 ===== */
 .brand{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);
-  border-radius:var(--r);padding:12px;box-shadow:var(--shadow);margin-bottom:12px}
+  border-radius:var(--r);padding:12px;box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden}
 .brand svg{width:42px;height:42px;flex:0 0 42px}
-.brand b{font-size:16px;display:block}
-.brand small{color:var(--ink-soft);font-size:11px}
+.brand .btxt{flex:1;min-width:0}
+.brand b{font-size:clamp(14px,1.2vw,16px);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand small{color:var(--ink-soft);font-size:clamp(10px,0.85vw,11px);white-space:nowrap;display:block}
 .navlist{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
   padding:8px;box-shadow:var(--shadow);position:sticky;top:14px}
 .navitem{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:12px;
@@ -103,10 +104,10 @@ input,textarea,select{font-family:inherit;font-size:15px}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
   padding:16px;box-shadow:var(--shadow);margin-bottom:14px}
 .panel h2{margin:0 0 4px;font-size:18px;display:flex;align-items:center;gap:8px}
-.panel h3{margin:14px 0 8px;font-size:15px;color:var(--accent,#c96f4a)}
+.panel h3{margin:14px 0 8px;font-size:15px;color:var(--accent,#e85d4a)}
 .sub{color:var(--ink-soft);font-size:12px;margin-bottom:10px}
 .tag{display:inline-block;font-size:11px;padding:2px 9px;border-radius:20px;background:var(--paper);color:var(--ink-soft);margin:2px}
-.btn{background:var(--accent,#c96f4a);color:#fff;padding:9px 14px;border-radius:12px;font-size:14px;
+.btn{background:var(--accent,#e85d4a);color:#fff;padding:9px 14px;border-radius:12px;font-size:14px;
   font-weight:600;box-shadow:0 3px 0 rgba(0,0,0,.08);transition:.12s}
 .btn:active{transform:translateY(2px);box-shadow:none}
 .btn.ghost{background:var(--paper);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--line)}
@@ -119,7 +120,7 @@ input,textarea,select{font-family:inherit;font-size:15px}
 hr{border:none;border-top:1px dashed var(--line);margin:12px 0}
 input[type=text],input[type=number],textarea,select{width:100%;border:1.5px solid var(--line);
   border-radius:10px;padding:9px 11px;background:var(--paper2);color:var(--ink);outline:none}
-input:focus,textarea:focus,select:focus{border-color:var(--accent,#c96f4a)}
+input:focus,textarea:focus,select:focus{border-color:var(--accent,#e85d4a)}
 textarea{resize:vertical;min-height:60px}
 label.f{font-size:12px;color:var(--ink-soft);display:block;margin:8px 0 3px}
 
@@ -140,8 +141,8 @@ label.f{font-size:12px;color:var(--ink-soft);display:block;margin:8px 0 3px}
 #bottombar .navitem .ico{width:30px;height:30px;font-size:20px;flex:0 0 30px;line-height:30px;
   background:var(--paper);display:block;border-radius:9px;text-align:center}
 #bottombar .navitem span.lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;text-align:center;display:block}
-#bottombar .navitem.active{background:var(--paper);font-weight:700;color:var(--accent,#c96f4a)}
-#bottombar .navitem.active .ico{background:var(--accent,#c96f4a);color:#fff}
+#bottombar .navitem.active{background:var(--paper);font-weight:700;color:var(--accent,#e85d4a)}
+#bottombar .navitem.active .ico{background:var(--accent,#e85d4a);color:#fff}
 #bottombar .navitem.more{color:var(--ink-soft)}
 body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 
@@ -219,8 +220,9 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 .task-photo .thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .task-photo .thumb .del{position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;border:none;font-size:10px;line-height:16px;text-align:center}
 .task-photo .up-btn{font-size:12px}
-.task .need-photo{color:var(--c-home);font-size:11px;margin-top:4px}
+.task .need-photo{display:none}
 .upload-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.upload-actions.tight{flex-wrap:nowrap}
 .upload-wrap{position:relative;display:inline-block;overflow:hidden;vertical-align:middle}
 .upload-wrap input[type=file]{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:0;border:none;padding:0;margin:0;z-index:10}
 .upload-wrap>.btn{display:inline-block}
@@ -259,11 +261,11 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 .kc b{color:var(--c-know)}
 .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 .tab{padding:6px 13px;border-radius:20px;background:var(--paper);font-size:13px;border:1px solid var(--line)}
-.tab.on{background:var(--accent,#c96f4a);color:#fff;border-color:var(--accent,#c96f4a)}
+.tab.on{background:var(--accent,#e85d4a);color:#fff;border-color:var(--accent,#e85d4a)}
 
 /* ===== 进度条 ===== */
 .bar{height:11px;background:var(--paper);border-radius:20px;overflow:hidden;border:1px solid var(--line)}
-.bar > i{display:block;height:100%;border-radius:20px;background:var(--accent,#c96f4a);transition:.4s}
+.bar > i{display:block;height:100%;border-radius:20px;background:var(--accent,#e85d4a);transition:.4s}
 .bar2{height:8px;background:var(--paper);border-radius:20px;overflow:hidden;border:1px solid var(--line)}
 .bar2 > i{display:block;height:100%;border-radius:20px;background:var(--c-word)}
 
@@ -408,7 +410,7 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 .modal-mask{position:fixed;inset:0;background:rgba(40,35,30,.45);z-index:60;display:none;align-items:center;justify-content:center;padding:16px}
 .modal-mask.show{display:flex}
 .modal{background:var(--card);border-radius:20px;max-width:560px;width:100%;max-height:88vh;overflow:auto;padding:18px;box-shadow:var(--shadow)}
-.pill{font-size:11px;padding:2px 9px;border-radius:20px;background:var(--accent,#c96f4a);color:#fff}
+.pill{font-size:11px;padding:2px 9px;border-radius:20px;background:var(--accent,#e85d4a);color:#fff}
 .stat-mini{display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px dashed var(--line)}
 .stat-mini:last-child{border:none}
 .prog-row{margin:12px 0;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
@@ -433,7 +435,7 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 <style>
 #hbFab{position:fixed;right:14px;bottom:18px;z-index:60;width:50px;height:50px;border-radius:50%;
   background:var(--c-home);color:#fff;font-size:23px;display:grid;place-items:center;
-  box-shadow:0 4px 14px rgba(201,111,74,.4);cursor:pointer;-webkit-tap-highlight-color:transparent}
+  box-shadow:0 4px 14px rgba(232,93,74,.4);cursor:pointer;-webkit-tap-highlight-color:transparent}
 #hbFab:active{transform:scale(.94)}
 @media(max-width:1080px){#hbFab{bottom:calc(78px + env(safe-area-inset-bottom))}}
 #hbMask{position:fixed;inset:0;z-index:90;background:rgba(20,15,5,.5);display:none;
@@ -445,7 +447,7 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 @media(min-width:1081px){#hbMask{align-items:center}#hbBox{border-radius:18px}}
 #hbBox h2{font-size:20px;margin:0 0 4px;color:#5a4708;display:flex;align-items:center;gap:8px}
 #hbBox .sub{font-size:12.5px;color:#8a7d6a;margin-bottom:8px}
-#hbBox h3{font-size:15px;margin:18px 0 6px;color:#c96f4a}
+#hbBox h3{font-size:15px;margin:18px 0 6px;color:#e85d4a}
 #hbBox .step{display:flex;gap:10px;margin:11px 0;align-items:flex-start}
 #hbBox .step .n{flex:0 0 24px;width:24px;height:24px;border-radius:50%;background:#ffd54f;
   color:#5a4708;display:grid;place-items:center;font-weight:700;font-size:13px}
@@ -464,7 +466,7 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 <div id="topbar">
   <div class="brand">
     <span style="font-size:30px;line-height:1">🫐</span>
-    <div><b>考研工作台</b><small>🫐 学习 · 打卡 · 放松</small></div>
+    <div class="btxt"><b>考研工作台</b><small>🫐 学习 · 打卡 · 放松</small></div>
   </div>
   <button class="topbar-menu" onclick="openMoreMenu()" title="所有模块">≡</button>
 </div>
@@ -473,7 +475,7 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
   <aside id="nav">
   <div class="brand">
     <span style="font-size:36px;line-height:1">🫐</span>
-    <div><b>考研工作台</b><small>🫐 学习 · 打卡 · 放松</small></div>
+    <div class="btxt"><b>考研工作台</b><small>🫐 学习 · 打卡 · 放松</small></div>
   </div>
     <div class="navlist" id="navlist"></div>
   </aside>
@@ -1839,7 +1841,7 @@ function aiRefresh(){ state._aiSeed=(state._aiSeed||0)+1; persist(); renderTask(
 function taskHTML(t){
   const sc=SUBJ_COLOR[t.subj]||'#999';
   const fid='tf_'+t.id;
-  const inpHtml=`<div class="upload-actions"><div class="upload-icon" onclick="doCamera('task_${t.id}')" title="直接拍照">📷</div><div class="upload-icon" onclick="doGallery('task_${t.id}')" title="图库上传">🖼</div></div>`;
+  const inpHtml=`<div class="upload-actions tight"><div class="upload-icon" onclick="doCamera('task_${t.id}')" title="直接拍照">📷</div><div class="upload-icon" onclick="doGallery('task_${t.id}')" title="图库上传">🖼</div></div>`;
   const ph=t.photo?`<div class="task-photo">
       <div class="thumb" onclick="taskPhotoView('${t.id}')">
         <img src="${t.photo}" alt="任务照片">
@@ -1848,7 +1850,6 @@ function taskHTML(t){
       ${inpHtml}
     </div>`:`<div class="task-photo">
       ${inpHtml}
-      ${t.status==='todo'||t.status==='doing'?'<span class="need-photo">📷 照片可选，不拍也能完成</span>':''}
     </div>`;
   return `<div class="task ${t.status==='done'?'done':''} ${t.status==='doing'?'doing':''}" style="--subj:${sc};flex-wrap:wrap">
     <div class="tmain">
