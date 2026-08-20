@@ -2,7 +2,7 @@
   "version": "v30",
   "date": "2026-08-20",
   "size": "约 42MB",
-  "apk": "latest.apk",
+  "apk": "https://github.com/pp67h/kaoyan-workbench/releases/download/v30/kaoyan-workbench-v30.apk",
   "changelog": [
     "GitHub 自动备份 + 一键恢复，数据更安全",
     "胖胖动画全阶段（待机 / 点击 / 睡觉，点胖胖有反应）",
