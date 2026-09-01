@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.9.1.3-->
+<!--APP_VER:2026.9.2-->
 <style>
 :root{
   --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
@@ -1007,22 +1007,53 @@ function renderHome(main){
   const msg=MESSAGES[dayIdx%MESSAGES.length];
   const enc=ENCOURAGE[dayIdx%ENCOURAGE.length];
   const today=new Date(d);
-  // 默认关键节点 + 用户自定义（state.keyDates 存在时优先使用并完全替换）
+  // 考研初试日期（从 state.examDate 读取，可设置）
+  const examD=state.examDate||'2026-12-21';
+  const examDateObj=new Date(examD+'T00:00:00');
+  const examMM=examDateObj.getMonth()+1;
+  const examDD=examDateObj.getDate();
+  const examLabel=examMM+'月'+examDD+'日';
+  // 默认关键节点 + 用户自定义
   const kds = (Array.isArray(state.keyDates) && state.keyDates.length) ? state.keyDates : KEY_DATES;
-  const cells = kds.map((k,i)=>{
+  // 筛选：考研初试（big）、正式报名、网上确认 为重点展示
+  const mainNodes=[];
+  const otherNodes=[];
+  kds.forEach((k,i)=>{
+    if(k.big || k.n==='正式报名' || k.n==='网上确认'){
+      mainNodes.push({k,i});
+    }else{
+      otherNodes.push({k,i});
+    }
+  });
+  // 考研初试（big）放在最前面
+  mainNodes.sort((a,b)=>{
+    if(a.k.big && !b.k.big) return -1;
+    if(!a.k.big && b.k.big) return 1;
+    return 0;
+  });
+  function kdHTML(k,i,small){
     const isBig = k.big;
-    const isPast = k.d.match(/^\d{4}-\d{2}-\d{2}$/) && new Date(k.d) < today;
+    const isPast = k.d.match(/^\d{4}-\d{2}-\d{2}$/) && new Date(k.d+'T00:00:00') < today;
     const isCurrent = k.d.match(/^\d{4}-\d{2}-\d{2}$/) && k.d===state.examDate;
     const cls = isBig ? 'kd big' : isPast ? 'kd past' : isCurrent ? 'kd on' : 'kd';
+    if(small){
+      return `<div class="${cls} kd-sm" style="position:relative">
+        <div class="kd-ico-sm">${k.ico||'📌'}</div>
+        <div class="kd-tx-sm"><div class="kd-n-sm">${k.n}</div><div class="kd-d-sm">${k.m||k.d}</div></div>
+      </div>`;
+    }
     return `<div class="${cls}" style="position:relative">
       <div class="kd-ico">${k.ico||'📌'}</div>
       <div class="kd-tx"><div class="kd-n">${k.n}</div><div class="kd-d">${k.m||k.d}</div></div>
       <button onclick="editKeyDate(${i})" title="编辑" style="position:absolute;top:4px;right:26px;background:rgba(255,255,255,.7);border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:12px;color:#888">✎</button>
       <button onclick="delKeyDate(${i})" title="删除" style="position:absolute;top:4px;right:4px;background:rgba(255,255,255,.7);border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:13px;color:#888">×</button>
     </div>`;
-  }).join('');
+  }
+  const mainCells=mainNodes.map(({k,i})=>kdHTML(k,i,false)).join('');
+  const otherCells=otherNodes.map(({k,i})=>kdHTML(k,i,true)).join('');
   main.innerHTML=`
-  <style>.kd{display:flex;align-items:center;gap:10px;padding:11px 13px;border:1px solid var(--line);border-radius:14px;background:var(--paper2);}
+  <style>
+  .kd{display:flex;align-items:center;gap:10px;padding:11px 13px;border:1px solid var(--line);border-radius:14px;background:var(--paper2);}
   .kd-ico{width:32px;height:32px;display:grid;place-items:center;background:#FFFDF5;border-radius:10px;font-size:17px;flex:0 0 32px;border:1px solid var(--line);}
   .kd-n{font-weight:600;font-size:14px}
   .kd-d{font-size:12px;color:var(--ink-soft);margin-top:2px}
@@ -1033,6 +1064,19 @@ function renderHome(main){
   .kd.big .kd-ico{background:rgba(255,255,255,.25);color:#fff;border-color:rgba(255,255,255,.3)}
   .kd.big .kd-d{color:rgba(255,255,255,.85)}
   .kd-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  .kd-sm{padding:8px 10px;gap:8px}
+  .kd-ico-sm{width:26px;height:26px;display:grid;place-items:center;background:#FFFDF5;border-radius:8px;font-size:14px;flex:0 0 26px;border:1px solid var(--line);}
+  .kd-n-sm{font-weight:600;font-size:13px}
+  .kd-d-sm{font-size:11px;color:var(--ink-soft);margin-top:1px}
+  .kd-tx-sm{flex:1;min-width:0}
+  .more-nodes{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);display:none}
+  .more-nodes.show{display:block}
+  .exam-big{background:linear-gradient(135deg,var(--c-home),#f07a5c);color:#fff;border-radius:18px;padding:18px 20px;text-align:center;margin-bottom:12px;box-shadow:0 6px 20px rgba(232,93,74,.25)}
+  .exam-big .exam-label{font-size:14px;opacity:.9;margin-bottom:4px}
+  .exam-big .exam-date{font-size:32px;font-weight:800;letter-spacing:.02em}
+  .exam-big .exam-left{font-size:13px;opacity:.9;margin-top:6px}
+  .exam-edit{font-size:12px;opacity:.7;cursor:pointer;margin-top:4px;display:inline-block}
+  .exam-edit:hover{opacity:1;text-decoration:underline}
   @media(min-width:760px){.kd-grid{grid-template-columns:repeat(2,1fr)}}
   @media(max-width:520px){.kd-grid{grid-template-columns:1fr}}
   </style>
@@ -1048,20 +1092,54 @@ function renderHome(main){
       ${progressPlans().map((p,i)=>`<div class="chip" style="cursor:pointer" onclick="editPlan(${i})" title="点击编辑">${p} ✎</div>`).join('')}
     </div>
     <hr>
-    <h3>🎯 关键节点 <span class="muted" style="font-weight:400;font-size:12px">可手动修改 / 添加</span></h3>
-    <div class="muted" style="font-size:11px;margin-bottom:8px">仅参考·以官方公告为准</div>
-    <div class="kd-grid">${cells}</div>
+    <h3>🎯 关键节点</h3>
+    <div class="muted" style="font-size:11px;margin-bottom:8px">仅参考·以官方公告为准 · 点击日期可修改</div>
+    <div class="exam-big" onclick="editExamDate()">
+      <div class="exam-label">📚 考研初试</div>
+      <div class="exam-date">${examLabel}</div>
+      <div class="exam-left">还剩 ${left} 天 · 点击修改日期</div>
+    </div>
+    <div class="kd-grid">${mainCells}</div>
+    ${otherNodes.length?`
+    <div style="margin-top:10px;text-align:center">
+      <button class="btn ghost sm" onclick="document.getElementById('moreNodes').classList.toggle('show');this.textContent=document.getElementById('moreNodes').classList.contains('show')?'收起更多 ▲':'查看更多 ▼'">查看更多 ▼</button>
+    </div>
+    <div class="more-nodes" id="moreNodes">
+      <div class="kd-grid">${otherCells}</div>
+    </div>`:''}
     <div class="row" style="margin-top:10px">
       <input type="text" id="kdN" placeholder="节点名称，如：现场确认" style="flex:2">
       <input type="date" id="kdD" style="flex:1">
       <input type="text" id="kdI" placeholder="emoji" style="max-width:60px">
       <button class="btn sm" onclick="addKeyDate()">添加</button>
     </div>
-    <button class="btn ghost sm" style="margin-top:6px" onclick="resetKeyDates()">恢复默认 8 条节点</button>
+    <button class="btn ghost sm" style="margin-top:6px" onclick="resetKeyDates()">恢复默认节点</button>
     <hr>
     <div class="spread"><span class="muted">今日鼓励</span><span class="pill">第${(dayIdx%ENCOURAGE.length)+1}句</span></div>
     <p style="margin:6px 0;font-size:15px">"${enc}"</p>
   </div>`;
+}
+function editExamDate(){
+  const cur=state.examDate||'2026-12-21';
+  openModal(`
+    <h2>✎ 修改考研初试日期</h2>
+    <label class="f">初试日期</label>
+    <input type="date" id="examDateIn" value="${cur}">
+    <div class="muted" style="font-size:12px;margin-top:6px">修改后倒计时和首页日期会自动更新</div>
+    <div class="row" style="margin-top:12px;justify-content:flex-end">
+      <button class="btn ghost" onclick="closeModal()">取消</button>
+      <button class="btn" onclick="saveExamDate()">保存</button>
+    </div>`);
+}
+function saveExamDate(){
+  const v=$('#examDateIn').value;
+  if(!v){ toast('请选择日期'); return; }
+  state.examDate=v;
+  persist();
+  closeModal();
+  renderHome($('#main'));
+  $('#side').innerHTML=renderSide();
+  toast('已更新考研初试日期');
 }
 
 function progressPlans(){
@@ -4813,20 +4891,11 @@ const KY_WORDS = [
 /* ---------- 娱乐区 ---------- */
 function renderFun(main){
   let html=`
-  <div class="panel"><h2>🎮 娱乐区</h2>
-    <div class="tabs">
-      <button class="tab on" onclick="funTab('match',this)">🔤 单词配对</button>
-      <button class="tab" onclick="funTab('memory',this)">🧠 记忆翻牌</button>
-      <button class="tab" onclick="funTab('food',this)">🍱 随机吃什么</button>
-    </div>
+  <div class="panel"><h2>🔤 单词配对</h2>
     <div id="funBody"></div>
   </div>`;
-  main.innerHTML=html; funTab('match');
-}
-function funTab(t,el){ $$('.panel .tab').forEach(x=>x.classList.remove('on')); if(el)el.classList.add('on'); const b=$('#funBody');
-  if(t==='match')b.innerHTML=matchHTML();
-  if(t==='memory')b.innerHTML=memoryHTML();
-  if(t==='food')b.innerHTML=foodHTML();
+  main.innerHTML=html;
+  $('#funBody').innerHTML=matchHTML();
 }
 /* 单词配对 */
 let matchData=null;
@@ -4918,66 +4987,6 @@ async function matchAddSel(){
   const ab=$('#matchAddBtn'); if(ab) ab.disabled=true;
   toast(added?`⭐ 已加入生词本 ${added} 个`:'所选都已在生词本');
 }
-/* 记忆翻牌 */
-let memData=null;
-function memoryHTML(){
-  const n=6;
-  const pool=KY_WORDS.slice();
-  for(let i=pool.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
-  const picked=pool.slice(0,n);
-  let cards=[]; picked.forEach((w,i)=>{ cards.push({t:w.en,id:i,type:'en'}); cards.push({t:cleanCn(w.cn),id:i,type:'cn'}); });
-  cards=cards.sort(()=>Math.random()-.5);
-  memData={cards,open:[],matched:new Set(),el:[]};
-  return `<div class="game-box"><div class="spread"><b>🧠 记忆翻牌</b><span class="muted">翻开配对 英文⇄中文</span></div>
-    <div class="sub" style="font-size:12px">高频核心 ${KY_WORDS.length} 词 · 本局 ${n} 对</div>
-    <div class="flip-grid" id="memGrid">
-      ${cards.map((c,i)=>`<div class="flip" onclick="memFlip(${i},this)"><i>？</i></div>`).join('')}
-    </div>
-    <button class="btn ghost sm" style="margin-top:8px" onclick="funTab('memory')">🔄 换一批</button></div>`;
-}
-function memFlip(i,el){
-  if(!memData||memData.matched.has(memData.cards[i].id)||el.classList.contains('open'))return;
-  if(memData.open.length===2)return;
-  el.classList.add('open'); el.querySelector('i').textContent=memData.cards[i].t;
-  memData.open.push({i,el});
-  if(memData.open.length===2){
-    const [a,b]=memData.open;
-    if(memData.cards[a.i].id===memData.cards[b.i].id && memData.cards[a.i].type!==memData.cards[b.i].type){
-      setTimeout(()=>{ a.el.style.opacity=.4; b.el.style.opacity=.4; memData.matched.add(memData.cards[a.i].id); memData.open=[]; if(memData.matched.size===memData.cards.length/2)toast('记牢啦 🧠'); },350);
-    }else{
-      setTimeout(()=>{ a.el.classList.remove('open'); b.el.classList.remove('open'); a.el.querySelector('i').textContent='？'; b.el.querySelector('i').textContent='？'; memData.open=[]; },700);
-    }
-  }
-}
-/* 随机吃什么 */
-const FOODS=[
-  {n:'麻辣香锅',w:3},{n:'黄焖鸡米饭',w:3},{n:'牛肉拉面',w:3},{n:'汉堡薯条',w:2},{n:'轻食沙拉',w:2},
-  {n:'螺蛳粉',w:2},{n:'饺子',w:2},{n:'日式咖喱饭',w:2},{n:'麻辣烫',w:3},{n:'煲仔饭',w:2},
-  {n:'炸鸡',w:1},{n:'皮蛋瘦肉粥',w:1},{n:'披萨',w:1},{n:'重庆小面',w:2},{n:'生煎包',w:2},
-];
-function foodHTML(){
-  return `<div class="game-box">
-    <div class="spread"><b>🍱 随机吃什么</b></div>
-    <div class="food-wheel" id="foodWheel">🤔 该吃点啥？</div>
-    <div class="row" style="justify-content:center">
-      <button class="btn" onclick="foodPick()">🎲 帮我选！</button>
-      <button class="btn ghost sm" onclick="foodList()">看全部</button>
-    </div>
-    <div id="foodAll" style="margin-top:8px"></div>
-  </div>`;
-}
-let foodRecent=[]; // 最近几次抽到的，避免老是重复同一批
-function foodPick(){
-  // 候选排除最近 2 次，并改为平权抽取，分布更均匀、不再“总是那几个”
-  const recent=new Set(foodRecent.slice(0,2));
-  let cands=FOODS.filter(f=>!recent.has(f.n));
-  if(cands.length<4) cands=FOODS.slice();
-  const names=cands.map(f=>f.n);
-  const wheel=$('#foodWheel'); let n=0;
-  const rnd=()=>names[Math.floor(Math.random()*names.length)];
-  const tick=setInterval(()=>{ wheel.textContent=rnd(); if(++n>18){clearInterval(tick); const pick=names[Math.floor(Math.random()*names.length)]; foodRecent.unshift(pick); foodRecent=foodRecent.slice(0,4); wheel.textContent='🍽️ '+pick; toast('就吃 '+pick+'！'); } },70);
-}
-function foodList(){ $('#foodAll').innerHTML='<div class="row">'+FOODS.map(f=>`<span class="tag">${f.n}</span>`).join('')+'</div>'; }
 
 
 /* ---------- 右侧栏 ---------- */
