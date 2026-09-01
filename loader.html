@@ -7,21 +7,47 @@
   .box{text-align:center;padding:24px;animation:pop .28s ease-out both}
   .dog{font-size:46px;margin-bottom:10px;animation:breathe 1.2s ease-in-out infinite alternate}
   b{font-size:18px;letter-spacing:.04em}
-  .tip{font-size:12px;color:#8b7d5c;margin-top:8px;opacity:.8;min-height:18px}
+  .tip{font-size:12px;color:#8b7d5c;margin-top:8px;opacity:.8;min-height:18px;transition:opacity .3s}
+  .dots::after{content:'';animation:dots 1.2s infinite}
+  @keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
   @keyframes pop{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
   @keyframes breathe{from{transform:scale(1)}to{transform:scale(1.06)}}
+  .retry{margin-top:12px;display:none}
+  .retry button{background:#e8d5a3;border:none;border-radius:8px;padding:6px 14px;font-size:12px;color:#5c4d2a;cursor:pointer}
 </style>
-<div class="box"><div class="dog">🫐</div><b>考研工作台</b><div class="tip" id="tip">加载中…</div></div>
+<div class="box">
+  <div class="dog">🫐</div>
+  <b>考研工作台</b>
+  <div class="tip dots" id="tip">加载中</div>
+  <div class="retry" id="retryBox"><button onclick="tryLoad()">重试</button></div>
+</div>
 <script>
 (function(){
   var REMOTE_BASE='https://pp67h.github.io/kaoyan-workbench/';
   var REMOTE_URL=REMOTE_BASE+'index.html?';
   var tipEl=document.getElementById('tip');
+  var retryBox=document.getElementById('retryBox');
   var done=false;
-  var localTimer=null;
+  var loadTimer=null;
+  var writeTimer=null;
+  var retryCount=0;
 
-  function setTip(t){ try{ tipEl.textContent=t; }catch(_){} }
-  function once(fn){ if(done) return; done=true; if(localTimer) clearTimeout(localTimer); fn(); }
+  function setTip(t, noDots){
+    try{
+      tipEl.textContent=t;
+      tipEl.classList.toggle('dots', !noDots);
+    }catch(_){}
+  }
+  function showRetry(){
+    try{ retryBox.style.display='block'; }catch(_){}
+  }
+  function once(fn){
+    if(done) return;
+    done=true;
+    if(loadTimer){ clearTimeout(loadTimer); loadTimer=null; }
+    if(writeTimer){ clearTimeout(writeTimer); writeTimer=null; }
+    fn();
+  }
 
   function loadLocal(){
     setTip('加载本地版本…');
@@ -29,51 +55,85 @@
     catch(e){ location.href='index.html?r='+Date.now(); }
   }
 
-  function loadRemote(html){
-    setTip('加载完成，正在进入…');
+  function loadRemoteViaRedirect(){
+    setTip('正在跳转到最新版…');
+    try{ location.replace(REMOTE_URL+Date.now()); }
+    catch(e){ location.href=REMOTE_URL+Date.now(); }
+  }
+
+  function loadRemoteViaWrite(html){
+    setTip('加载完成，正在进入…', true);
     try{
       // 注入 base 标签，确保相对路径资源正确加载
       html=html.replace(/<head([^>]*)>/i,'<head$1><base href="'+REMOTE_BASE+'">');
       document.open();
       document.write(html);
       document.close();
+      // 兜底：如果 3 秒后还在这页，说明写入可能失败了，跳转方式试试
+      writeTimer=setTimeout(function(){
+        if(!done) return;
+        // 如果还能执行到这里，说明页面没被替换，用跳转方式
+        loadRemoteViaRedirect();
+      }, 3000);
     }catch(e){
-      // 写入失败，回退本地
-      loadLocal();
+      // 写入失败，用跳转方式
+      loadRemoteViaRedirect();
     }
   }
 
-  // 2.5 秒兜底：超时就进本地版
-  localTimer=setTimeout(function(){
-    setTip('网络较慢，用本地版本');
-    once(loadLocal);
-  }, 2500);
+  window.tryLoad=function(){
+    if(done) return;
+    retryCount++;
+    done=false;
+    if(loadTimer){ clearTimeout(loadTimer); }
+    if(writeTimer){ clearTimeout(writeTimer); }
+    setTip('正在加载最新版');
+    doFetch();
+  };
 
-  // 尝试加载远程最新版（优先）
-  setTip('正在加载最新版…');
-  try{
-    var ts=Date.now();
-    fetch(REMOTE_URL+ts,{
-      cache:'no-store',
-      mode:'cors',
-      credentials:'omit'
-    })
-    .then(function(r){
-      if(!r.ok) throw new Error('HTTP '+r.status);
-      return r.text();
-    })
-    .then(function(html){
-      if(!html || html.length<500) throw new Error('内容为空');
-      once(function(){ loadRemote(html); });
-    })
-    .catch(function(e){
-      // 远程失败，立即回退本地
-      setTip('连接失败，用本地版本');
-      once(loadLocal);
-    });
-  }catch(e){
-    setTip('加载出错，用本地版本');
-    once(loadLocal);
+  function doFetch(){
+    try{
+      var ts=Date.now();
+      var xhr=new XMLHttpRequest();
+      xhr.open('GET', REMOTE_URL+ts, true);
+      xhr.timeout=8000;
+      xhr.onload=function(){
+        if(xhr.status>=200 && xhr.status<300 && xhr.responseText && xhr.responseText.length>500){
+          once(function(){ loadRemoteViaWrite(xhr.responseText); });
+        }else{
+          handleFail('HTTP '+xhr.status);
+        }
+      };
+      xhr.onerror=function(){ handleFail('网络错误'); };
+      xhr.ontimeout=function(){ handleFail('连接超时'); };
+      xhr.send();
+    }catch(e){
+      handleFail(e.message||'加载出错');
+    }
   }
+
+  function handleFail(msg){
+    if(retryCount<2){
+      // 自动重试一次
+      setTip(msg+'，重试中…');
+      setTimeout(function(){ window.tryLoad(); }, 800);
+      return;
+    }
+    // 重试两次都失败，用本地版本
+    setTip(msg+'，用本地版本', true);
+    once(loadLocal);
+    showRetry();
+  }
+
+  // 8 秒兜底超时（比 fetch 超时更长，防止意外卡住）
+  loadTimer=setTimeout(function(){
+    setTip('加载太慢，用本地版本', true);
+    once(loadLocal);
+    showRetry();
+  }, 10000);
+
+  // 开始加载
+  setTip('正在加载最新版');
+  doFetch();
 })();
 </script>
