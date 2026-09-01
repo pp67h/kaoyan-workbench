@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.8.21.12-->
+<!--APP_VER:2026.9.1.1-->
 <style>
 :root{
   --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
@@ -5240,105 +5240,52 @@ async function syncNow(forcePull){
   persist();
   const st=$('#syncStatus'); if(st) st.textContent=syncStatusText();
 }
-/* ===== App 版本更新（APK 一键更新）===== */
-var APK_VER_URL=SITE_BASE+'/version.json';
-var APK_DEFAULT_INSTALLED='v30'; /* 功能上线前最后发出去的 APK 版本 */
-function apkInstalled(){
-  /* 原生接口能直接读到 APK 版本号（v31+）；旧 APK 退回本地记录 */
-  try{
-    if(window.Android && typeof window.Android.appVersion==='function'){
-      var v=window.Android.appVersion();
-      if(v && v.indexOf('2026.8.22')===0) return 'v31';
-      if(v) return 'v30';
-    }
-  }catch(_){}
-  try{ return localStorage.getItem('apkInstalled')||APK_DEFAULT_INSTALLED; }catch(_){ return APK_DEFAULT_INSTALLED; }
+/* ===== 一键更新（网页内容，像备份一样点一下就好）===== */
+function webVerNewer(a,b){
+  var x=String(a||'0').split('.').map(Number), y=String(b||'0').split('.').map(Number);
+  for(var i=0;i<Math.max(x.length,y.length);i++){
+    var xi=x[i]||0, yi=y[i]||0;
+    if(xi>yi) return true;
+    if(xi<yi) return false;
+  }
+  return false;
 }
-async function apkCheck(){
-  var box=document.getElementById('apkBox'); if(!box) return;
-  box.innerHTML='<div class="sub" style="margin:8px 0 0">⏳ 正在检查新版本…</div>';
-  try{
-    var r=await fetch(APK_VER_URL+'?t='+Date.now(),{cache:'no-store'});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    var v=await r.json();
-    if(!v||!v.version) throw new Error('版本信息不完整');
-    window.__apkLatest=v;
-    try{ localStorage.setItem('__apkChk',String(Date.now())); }catch(_){}
-    apkRender(v);
-  }catch(e){
-    box.innerHTML='<div class="sub" style="margin:8px 0 0">❌ 检查失败（'+e.message+'），需联网，稍后再试</div>';
+function webApplyUpdate(html){
+  if(location.protocol==='file:'){
+    html=html.replace(/<head([^>]*)>/i,'<head$1><base href="'+SITE_BASE+'/">');
+    document.open(); document.write(html); document.close();
+  }else{
+    location.reload(true);
   }
 }
-function apkCanAuto(){
-  return !!(window.Android && typeof window.Android.installApk==='function');
-}
-function apkRender(v){
-  var box=document.getElementById('apkBox'); if(!box||!v) return;
-  var mine=apkInstalled();
-  var same=(mine===v.version);
-  var url=/^https?:/.test(v.apk||'') ? v.apk : SITE_BASE+'/'+(v.apk||'latest.apk');
-  var pill=document.getElementById('apkMinePill');
-  if(pill) pill.textContent='已装 '+mine;
-  var auto=apkCanAuto();
-  var btn=auto
-    ? '<button class="btn sm" onclick="apkGo(\''+url+'\',\''+v.version+'\')">🔄 一键更新到 '+v.version+'</button>'
-    : '<a class="btn sm" style="text-decoration:none" href="'+url+'" target="_blank" rel="noopener">⬇️ 下载 '+v.version+' 安装包'+(v.size?'（'+v.size+'）':'')+'</a>';
-  var guide=auto
-    ? '<div class="sub" style="margin:8px 0 0">点一下就行：自动后台下载 → 自动弹出安装 → 装完打开 App 就是新版，全程不用浏览器</div>'
-    : '<div style="margin-top:10px;padding:10px 12px;border:1.5px dashed var(--line);border-radius:12px;background:var(--paper);font-size:12.5px;line-height:2">'+
-        '<b style="color:var(--c-cloud)">🔑 旧版 App 没有自动安装能力，需一次性换装 '+v.version+'（约 1 分钟，仅此一次）：</b><br>'+
-        '① 本页开启 GitHub 自动备份，点一次备份确认成功<br>'+
-        '② 卸载手机上的旧版 App（换了新签名，必须先卸载）<br>'+
-        '③ 点上方按钮下载 '+v.version+' 安装；弹出「允许安装」点允许<br>'+
-        '④ 打开新 App → GitHub 恢复数据 → 完成<br>'+
-        '<b>之后所有新版本：只点「🔄 一键更新」→ 自动下载 → 自动弹安装，再也不用手动下载</b>'+
-      '</div>'+
-      '<div class="sub" style="margin:8px 0 0">功能和界面更新本来就是全自动的（重开 App 即最新），这里只管 App 本体</div>';
-  box.innerHTML=
-    '<div class="row" style="margin-top:8px;align-items:center;flex-wrap:wrap;gap:6px">'+
-      '<span class="pill">最新 '+v.version+'</span>'+
-      (same
-        ?'<span class="pill" style="background:#d8e8be;color:#4a6b3a">✓ 已是最新</span>'
-        :'<span class="pill" style="background:#f7e0d8;color:#b05a3e">🆕 有新版</span>')+
-      '<span class="muted" style="font-size:11px">'+(v.date||'')+'</span>'+
-    '</div>'+
-    '<div style="font-size:12.5px;margin-top:6px;line-height:1.7;color:var(--ink)">'+(v.changelog||[]).map(function(c){return '· '+c;}).join('<br>')+'</div>'+
-    '<div class="row" style="margin-top:8px;flex-wrap:wrap;gap:6px">'+
-      btn+
-      (auto?'':'<button class="btn ghost sm" onclick="apkCopyLink(\''+url+'\')">📋 复制链接</button>')+
-      (same?'':'<button class="btn ghost sm" onclick="apkMark(\''+v.version+'\')">✓ 装好后点此标记</button>')+
-    '</div>'+
-    guide;
-}
-function apkGo(url,ver){
-  if(!apkCanAuto()){ window.open(url,'_blank'); return; }
-  try{ window.Android.installApk(url); }catch(e){ toast('⚠️ 调用失败，请用浏览器下载'); window.open(url,'_blank'); }
-}
-function apkMark(ver){
-  try{ localStorage.setItem('apkInstalled',ver); }catch(_){}
-  toast('✓ 已标记 '+ver+' 为当前版本');
-  apkRender(window.__apkLatest);
-  var pill=document.getElementById('apkMinePill'); if(pill) pill.textContent='已装 '+ver;
-}
-function apkCopyLink(url){
+async function webUpdate(){
+  toast('⏳ 正在检查最新版…');
   try{
-    var i=document.createElement('input'); i.value=url;
-    document.body.appendChild(i); i.select(); i.setSelectionRange(0,99999);
-    document.execCommand('copy'); i.remove();
-    toast('✓ 链接已复制，粘贴到浏览器即可下载');
-  }catch(e){ toast(url); }
+    var r=await fetch(SITE_BASE+'/index.html?t='+Date.now(),{cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    var t=await r.text();
+    var mm=t.match(/APP_VER:([\d.]+)/);
+    var remote=mm?mm[1]:null;
+    var m=document.documentElement.outerHTML.match(/APP_VER:([\d.]+)/);
+    var mine=m?m[1]:'0';
+    if(remote && webVerNewer(remote,mine)){
+      toast('✨ 发现新版，正在更新…');
+      setTimeout(function(){ webApplyUpdate(t); },600);
+    }else{
+      toast('✓ 已是最新版，无需更新');
+    }
+  }catch(e){ toast('❌ 检查失败（需联网），稍后再试'); }
 }
 function renderCloud(main){
   const s=state.sync||{};
   const g=ghCfg();
   let html=`
   <div class="panel">
-    <div class="spread"><h3 style="margin-top:0">📦 App 版本更新</h3><span class="pill" id="apkMinePill">${apkInstalled()?'已装 '+apkInstalled():'未记录'}</span></div>
+    <div class="spread"><h3 style="margin-top:0">🔄 一键更新</h3><span class="muted" style="font-size:11px">和备份一样，点一下就好</span></div>
     <div class="row" style="margin-top:6px">
-      <button class="btn sm" onclick="apkCheck()">🔍 检查更新</button>
-      <span class="muted" style="font-size:11px">网页内容更新是全自动的；这里只更新 App 本体（新 APK）</span>
+      <button class="btn sm" onclick="webUpdate()">🔄 检查并更新</button>
+      <span class="muted" style="font-size:11px">新功能自动生效，无需下载安装包</span>
     </div>
-    <div id="apkBox"></div>
   </div>
   <div class="panel">
     <div class="spread"><h3 style="margin-top:0">🐙 GitHub 自动备份（推荐）</h3><span class="pill">${g.on?'已开启':'未开启'}</span></div>
@@ -5357,23 +5304,8 @@ function renderCloud(main){
       <button class="btn ghost sm" style="flex:1" onclick="ghRestore()">📥 从 GitHub 恢复</button>
     </div>
     <div class="muted" style="font-size:12px;margin-top:6px" id="ghStatus">${ghStatusText()}</div>
-    <div class="row" style="margin-top:8px;gap:8px">
-      <button class="btn ghost sm" style="flex:1" onclick="snapRestore()">🛟 恢复到最近快照</button>
-    </div>
-  </div>
-  <div class="panel">
-    <h3 style="margin-top:0">⚙️ 数据管理</h3>
-    <div class="row" style="margin-top:6px">
-      <button class="btn ghost sm" onclick="exportBackup()">本地导出</button>
-      <div class="upload-wrap"><span class="btn ghost sm" style="cursor:pointer">本地导入</span><input type="file" id="impFile" accept="*/*" onchange="importBackup(this)"></div>
-    </div>
   </div>`;
   main.innerHTML=html;
-  /* 进入云同步页自动检查一次 APK 更新（每天最多一次）*/
-  try{
-    var lastApkChk=+localStorage.getItem('__apkChk')||0;
-    if(Date.now()-lastApkChk>24*3600*1000) setTimeout(apkCheck,400);
-  }catch(_){}
 }
 async function cloudBackup(){
   let code=(state.sync&&state.sync.code)||'';
@@ -5870,7 +5802,7 @@ showModule('home');
 
     <h3>🔗 两台设备互通</h3>
     <div class="note"><b>☁️ 两台设备实时云同步：</b>手机和平板都装好后，分别打开 App → 右栏「☁️ 云同步」→ 输入<b>同一个同步码</b>（如 <code>kao2026</code>）→ 点「开启同步」。之后两边自动互通：哪边数据多就传哪边、重复内容不重复传、<b>删掉的任务也会同步删掉</b>。数据会先存在本地，再同步到云端。</div>
-    <div class="warn"><b>⚠️ 数据安全第一：</b>重要节点仍建议用「⚙️ 数据管理 → 导出备份」保存一份 JSON 到自己手机/云盘，作为额外保险。</div>
+    <div class="warn"><b>⚠️ 数据安全第一：</b>建议开启「🐙 GitHub 自动备份」，数据会存在你自己的 GitHub 私有仓库里，随时可恢复。</div>
 
     <h3>❓ 常见问题</h3>
     <div class="q">打开白屏 / 转圈？</div>
@@ -5878,7 +5810,7 @@ showModule('home');
     <div class="q">找不到「添加到主屏幕」？</div>
     <div class="a">OPPO/华为 一般在浏览器右上角 <code>⋮</code> 菜单里；也可在浏览器「分享」里找「添加到主屏幕」。</div>
     <div class="q">以后有更新怎么办？</div>
-    <div class="a">网页功能更新全自动——你重开 App 就是新版；涉及 App 本体（拍照、权限等）时，去「☁️ 云同步 → 📦 App 版本更新」一键下载新 APK 安装。</div>
+    <div class="a">全自动——重开 App 就是新版；等不及的话，去「☁️ 云同步 → 🔄 一键更新」点一下，立即更新到最新，不用下载任何安装包。</div>
   </div>
 </div>
 <script>
