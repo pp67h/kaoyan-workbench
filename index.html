@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.9.1.1-->
+<!--APP_VER:2026.9.1.2-->
 <style>
 :root{
   --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
@@ -1115,10 +1115,10 @@ function resetKeyDates(){ state.keyDates=[]; persist(); renderHome($('#main')); 
 /* ---------- 月度规划日历 ---------- */
 function renderCal(main){
   const d=new Date('2026-08-01');
-  const weeks=getWeeks(2026,8,10);
+  const weeks=getWeeks(2026,8,12);
   let html=`<div class="panel" style="border-radius:clamp(18px,3vw,28px);padding:clamp(14px,3vw,26px)"><div class="cal-head">
     <button class="btn ghost sm" onclick="shiftMonth(-1)">‹ 上月</button>
-    <h2 style="margin:0">📅 2026年8月–12月 规划</h2>
+    <h2 style="margin:0" id="calTitle">📅 2026年${calMonth}月</h2>
     <button class="btn ghost sm" onclick="calJumpToday()">今天</button>
     <button class="btn ghost sm" onclick="shiftMonth(1)">下月 ›</button></div>
     <div class="sub">点日期进打卡 · 长按写日记</div>
@@ -1132,7 +1132,10 @@ function renderCal(main){
       <span style="display:flex;align-items:center;gap:4px"><span style="width:18px;height:18px;border-radius:6px;background:#a0cb88"></span><span style="font-size:12px;color:var(--ink-soft)">≥8h</span></span>
     </div>
     <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:14px">
-      <div class="spread"><h3 style="margin:0;font-size:clamp(14px,2.2vw,16px);font-weight:600">🗓️ 月计划（${calMonth}月）</h3></div>
+      <div class="spread">
+        <h3 style="margin:0;font-size:clamp(14px,2.2vw,16px);font-weight:600">🗓️ 月计划 · 2026年${calMonth}月</h3>
+        <button class="btn ghost sm" onclick="copyPrevMonthPlan()" id="copyPrevBtn" style="font-size:12px">📋 复制上月未完成</button>
+      </div>
       
       <div id="monthList"></div>
       <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">
@@ -1160,9 +1163,10 @@ function renderCal(main){
       </div>
     </div>`;
   main.innerHTML=html;
-  drawCalendar(8);
+  drawCalendar(calMonth);
   renderWeekList();
   renderMonthList();
+  updateCopyPrevBtn();
 }
 function fmtDate(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function getWeeks(y,mStart,mEnd){
@@ -1467,6 +1471,37 @@ function monthAdd(){
   $('#mPlanIn').value=''; if($('#mPlanTotal'))$('#mPlanTotal').value=''; if($('#mPlanUnit'))$('#mPlanUnit').value=''; if(linkEl) linkEl.value='';
   renderMonthList();
 }
+function updateCopyPrevBtn(){
+  const btn=document.getElementById('copyPrevBtn');
+  if(!btn) return;
+  if(calMonth<=8){ btn.style.display='none'; return; }
+  btn.style.display='';
+}
+function copyPrevMonthPlan(){
+  if(calMonth<=8){ toast('8月是第一个月，没有上月'); return; }
+  if(!state.monthPlan){ toast('上月没有计划可复制'); return; }
+  const prevMk=String(2026)+'-'+String(calMonth-1).padStart(2,'0');
+  const curMk=String(2026)+'-'+String(calMonth).padStart(2,'0');
+  const prevItems=state.monthPlan.filter(x=>x.month===prevMk && !x.done);
+  if(!prevItems.length){ toast('上月全部完成啦，没有未完成的任务 🎉'); return; }
+  const curItems=state.monthPlan.filter(x=>x.month===curMk);
+  let added=0;
+  prevItems.forEach(it=>{
+    // 避免重复复制
+    const exists=curItems.find(x=>x.t===it.t);
+    if(exists) return;
+    state.monthPlan.push({
+      month:curMk, t:it.t, total:it.total||0, cur:it.cur||0,
+      done:false, unit:it.unit||'页',
+      link:it.link||'', _t:Date.now()
+    });
+    added++;
+  });
+  if(added===0){ toast('这些任务本月已经有了，没有重复添加'); return; }
+  persist();
+  renderMonthList();
+  toast('✅ 已复制 '+added+' 条上月未完成任务到本月');
+}
 function monthToggle(i){
   if(!state.monthPlan) return;
   const mk=String(2026)+'-'+String(calMonth).padStart(2,'0');
@@ -1568,7 +1603,7 @@ function syncProgressFromMonthPlan(changedItem){
   if(!changedItem||!changedItem.link) return;
   setProgressByLink(changedItem.link,changedItem.cur,changedItem.total);
 }
-let calMonth=8;
+let calMonth=(function(){ const m=new Date().getMonth()+1; return Math.min(12,Math.max(8,m)); })();
 // 按当天学习时长返回抹茶热力等级（0-4）
 function studyHeatGrade(sec){
   const h=(sec||0)/3600;
@@ -1621,13 +1656,23 @@ function drawCalendar(month){
     grid.appendChild(c);
   }
 }
-function shiftMonth(n){ calMonth=Math.min(12,Math.max(8,calMonth+n)); drawCalendar(calMonth); }
+function shiftMonth(n){
+  calMonth=Math.min(12,Math.max(8,calMonth+n));
+  drawCalendar(calMonth);
+  const t=document.getElementById('calTitle');
+  if(t) t.textContent='📅 2026年'+calMonth+'月';
+  renderMonthList();
+  updateCopyPrevBtn();
+}
 function calJumpToday(){
   const m=todayMonth();
   calMonth=Math.min(12,Math.max(8,m));
   drawCalendar(calMonth);
+  const t=document.getElementById('calTitle');
+  if(t) t.textContent='📅 2026年'+calMonth+'月';
   renderMonthList();
   if(typeof renderWeekList==='function') renderWeekList();
+  updateCopyPrevBtn();
   toast('已回到今天所在月份');
 }
 function openCalDay(ds){
@@ -5603,10 +5648,18 @@ function pangpangSnackName(i){
   return ['一小口鸡胸肉','一颗小饼干','一次摸摸头','一个大大的贴贴'][Math.max(0,Math.min(3,i))];
 }
 let pangpangBusy=false;
+let pangpangBusyTimer=null;
 function feedDog(){ pangpangTap(); }
 function pangpangTap(){
   resetDogIfNeeded();
-  if(pangpangBusy) return;
+  // 安全机制：如果 busy 超过 8 秒，强制复位
+  if(pangpangBusy){
+    if(pangpangBusyTimer && Date.now()-pangpangBusyTimer>8000){
+      pangpangBusy=false;
+    }else{
+      return;
+    }
+  }
   const st=pangpangStats();
   const rest=pangpangRestState();
   const phase=state.dog.phase||0;
@@ -5618,6 +5671,7 @@ function pangpangTap(){
   const asset=PANGPANG_STAGE_ASSETS[phase]||PANGPANG_STAGE_ASSETS[0];
   if(st.unlocked>phase && phase<4){
     pangpangBusy=true;
+    pangpangBusyTimer=Date.now();
     const newPhase=phase+1;
     pangpangPlayOneShot(asset.advance, asset.tap||asset.fallback, '', ()=>{
       state.dog.phase=newPhase;
@@ -5628,6 +5682,7 @@ function pangpangTap(){
       pangpangUpdateBadge(newPhase);
       toast('胖胖进入下一个状态啦。继续学,她陪着你。');
       pangpangBusy=false;
+      pangpangBusyTimer=null;
     });
     return;
   }
@@ -5673,28 +5728,41 @@ function pangpangPlayOneShot(src, fallback='pangpang_pet_loop.mp4', msg='', onDo
   v.onended=null;
   v.onerror=null;
   v.loop=false;
+  let called=false;
+  const finish=()=>{
+    if(called) return; called=true;
+    v.classList.remove('show');
+    setTimeout(()=>{
+      try{ v.pause(); }catch(_){}
+      v.removeAttribute('src');
+      try{ v.load(); }catch(_){}
+      if(onDone) onDone();
+    }, 200);
+  };
+  v.onended=finish;
+  v.onerror=()=>{
+    if(fallback && fallback!==src){
+      v.onerror=null;
+      v.src=fallback;
+      v.play().then(()=>v.classList.add('show')).catch(()=>{ finish(); });
+    }else{
+      finish();
+    }
+  };
   v.src=src||fallback;
   v.play().then(()=>{
     v.classList.add('show');
   }).catch(()=>{
     if(fallback && fallback!==src){
       v.src=fallback;
-      v.play().then(()=>v.classList.add('show')).catch(()=>{});
+      v.play().then(()=>v.classList.add('show')).catch(()=>{ finish(); });
+    }else{
+      finish();
     }
   });
   if(msg) toast(msg);
-  let called=false;
-  const finish=()=>{
-    if(called) return; called=true;
-    v.classList.remove('show');
-    setTimeout(()=>{
-      v.removeAttribute('src');
-      v.load();
-      if(onDone) onDone();
-    }, 200);
-  };
-  v.onended=finish;
-  setTimeout(finish, 5500);
+  // 兜底：6秒后强制结束
+  setTimeout(finish, 6000);
 }
 function pangpangUpdateBadge(phase){
   const badge=document.querySelector('.pangpang-badge');
