@@ -3,84 +3,77 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>考研工作台</title>
 <style>
-  body{margin:0;min-height:100vh;display:grid;place-items:center;background:#fbf3e2;color:#3d3a36;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:#fbf3e2;color:#3d3a36;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-text-size-adjust:100%}
   .box{text-align:center;padding:24px;animation:pop .28s ease-out both}
   .dog{font-size:46px;margin-bottom:10px;animation:breathe 1.2s ease-in-out infinite alternate}
   b{font-size:18px;letter-spacing:.04em}
-  .tip{font-size:12px;color:#8b7d5c;margin-top:8px;opacity:.7}
-  .err{font-size:12px;color:#c05b3e;margin-top:8px;max-width:260px;word-break:break-all}
+  .tip{font-size:12px;color:#8b7d5c;margin-top:8px;opacity:.8;min-height:18px}
   @keyframes pop{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
   @keyframes breathe{from{transform:scale(1)}to{transform:scale(1.06)}}
 </style>
-<div class="box"><div class="dog">🫐</div><b>考研工作台</b><div class="tip" id="tip">正在加载…</div></div>
+<div class="box"><div class="dog">🫐</div><b>考研工作台</b><div class="tip" id="tip">加载中…</div></div>
 <script>
 (function(){
-  var LOCAL_VER='2026.9.1';
   var REMOTE_BASE='https://pp67h.github.io/kaoyan-workbench/';
-  var REMOTE_URL=REMOTE_BASE+'index.html?t='+Date.now();
+  var REMOTE_URL=REMOTE_BASE+'index.html?';
   var tipEl=document.getElementById('tip');
-  function setTip(t){ if(tipEl) tipEl.textContent=t; }
-  function verOf(html){
-    var m=String(html||'').match(/APP_VER:([\d.]+)/);
-    return m?m[1]:'0';
-  }
-  function newer(a,b){
-    var x=String(a||'0').split('.').map(Number), y=String(b||'0').split('.').map(Number);
-    for(var i=0;i<Math.max(x.length,y.length);i++){
-      var xi=x[i]||0, yi=y[i]||0;
-      if(xi>yi) return true;
-      if(xi<yi) return false;
-    }
-    return false;
-  }
-  function local(){
+  var done=false;
+  var localTimer=null;
+
+  function setTip(t){ try{ tipEl.textContent=t; }catch(_){} }
+  function once(fn){ if(done) return; done=true; if(localTimer) clearTimeout(localTimer); fn(); }
+
+  function loadLocal(){
     setTip('加载本地版本…');
-    try{ location.replace('index.html?t='+Date.now()); }
-    catch(e){ location.href='index.html?t='+Date.now(); }
+    try{ location.replace('index.html?r='+Date.now()); }
+    catch(e){ location.href='index.html?r='+Date.now(); }
   }
-  function remote(html){
-    setTip('加载最新版本…');
+
+  function loadRemote(html){
+    setTip('加载完成，正在进入…');
     try{
+      // 注入 base 标签，确保相对路径资源正确加载
       html=html.replace(/<head([^>]*)>/i,'<head$1><base href="'+REMOTE_BASE+'">');
       document.open();
       document.write(html);
       document.close();
     }catch(e){
-      setTip('加载失败，回退本地…');
-      setTimeout(local, 500);
+      // 写入失败，回退本地
+      loadLocal();
     }
   }
-  var done=false;
-  function once(fn){ if(done) return; done=true; fn(); }
-  // 3秒兜底：无论网络如何，3秒内必须进入页面
-  var fallbackTimer=setTimeout(function(){
-    once(local);
-  }, 3000);
-  setTip('正在检查更新…');
+
+  // 2.5 秒兜底：超时就进本地版
+  localTimer=setTimeout(function(){
+    setTip('网络较慢，用本地版本');
+    once(loadLocal);
+  }, 2500);
+
+  // 尝试加载远程最新版（优先）
+  setTip('正在加载最新版…');
   try{
-    fetch(REMOTE_URL,{cache:'no-store'})
-      .then(function(r){
-        if(!r.ok) throw new Error('HTTP '+r.status);
-        return r.text();
-      })
-      .then(function(html){
-        clearTimeout(fallbackTimer);
-        var rv=verOf(html);
-        if(rv && newer(rv,LOCAL_VER)){
-          once(function(){ remote(html); });
-        }else{
-          once(local);
-        }
-      })
-      .catch(function(e){
-        clearTimeout(fallbackTimer);
-        setTip('网络问题，用本地版本');
-        once(local);
-      });
+    var ts=Date.now();
+    fetch(REMOTE_URL+ts,{
+      cache:'no-store',
+      mode:'cors',
+      credentials:'omit'
+    })
+    .then(function(r){
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      return r.text();
+    })
+    .then(function(html){
+      if(!html || html.length<500) throw new Error('内容为空');
+      once(function(){ loadRemote(html); });
+    })
+    .catch(function(e){
+      // 远程失败，立即回退本地
+      setTip('连接失败，用本地版本');
+      once(loadLocal);
+    });
   }catch(e){
-    clearTimeout(fallbackTimer);
     setTip('加载出错，用本地版本');
-    once(local);
+    once(loadLocal);
   }
 })();
 </script>
