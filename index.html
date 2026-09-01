@@ -5285,42 +5285,6 @@ async function syncNow(forcePull){
   persist();
   const st=$('#syncStatus'); if(st) st.textContent=syncStatusText();
 }
-/* ===== 一键更新（网页内容，像备份一样点一下就好）===== */
-function webVerNewer(a,b){
-  var x=String(a||'0').split('.').map(Number), y=String(b||'0').split('.').map(Number);
-  for(var i=0;i<Math.max(x.length,y.length);i++){
-    var xi=x[i]||0, yi=y[i]||0;
-    if(xi>yi) return true;
-    if(xi<yi) return false;
-  }
-  return false;
-}
-function webApplyUpdate(html){
-  if(location.protocol==='file:'){
-    html=html.replace(/<head([^>]*)>/i,'<head$1><base href="'+SITE_BASE+'/">');
-    document.open(); document.write(html); document.close();
-  }else{
-    location.reload(true);
-  }
-}
-async function webUpdate(){
-  toast('⏳ 正在检查最新版…');
-  try{
-    var r=await fetch(SITE_BASE+'/index.html?t='+Date.now(),{cache:'no-store'});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    var t=await r.text();
-    var mm=t.match(/APP_VER:([\d.]+)/);
-    var remote=mm?mm[1]:null;
-    var m=document.documentElement.outerHTML.match(/APP_VER:([\d.]+)/);
-    var mine=m?m[1]:'0';
-    if(remote && webVerNewer(remote,mine)){
-      toast('✨ 发现新版，正在更新…');
-      setTimeout(function(){ webApplyUpdate(t); },600);
-    }else{
-      toast('✓ 已是最新版，无需更新');
-    }
-  }catch(e){ toast('❌ 检查失败（需联网），稍后再试'); }
-}
 function renderCloud(main){
   const s=state.sync||{};
   const g=ghCfg();
@@ -5871,7 +5835,7 @@ showModule('home');
     <div class="q">找不到「添加到主屏幕」？</div>
     <div class="a">OPPO/华为 一般在浏览器右上角 <code>⋮</code> 菜单里；也可在浏览器「分享」里找「添加到主屏幕」。</div>
     <div class="q">以后有更新怎么办？</div>
-    <div class="a">全自动——重开 App 就是新版；等不及的话，去「☁️ 云同步 → 🔄 一键更新」点一下，立即更新到最新，不用下载任何安装包。</div>
+    <div class="a">全自动——每次打开 App 自动加载最新版，就像网页一样。关掉重开就是新的，不用下载、不用安装。</div>
   </div>
 </div>
 <script>
