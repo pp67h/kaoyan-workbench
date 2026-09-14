@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.9.2-->
+<!--APP_VER:2026.9.3-->
 <style>
 :root{
   --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
@@ -37,6 +37,7 @@
   --c-fun:#d98a3e;    /* 娱乐区 · 暖橙 */
   --c-cloud:#9a8b5e;  /* 云同步 · 橄榄金 */
   --c-prog:#8fa96a;   /* 进度概览 · 抹茶绿 */
+  --c-plan:#7b8fa4;   /* 背诵计划 · 青灰蓝 */
   --r:18px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -588,6 +589,7 @@ const MODULES = [
   {id:'mood',  name:'情绪树洞',   ico:'💭', color:'var(--c-mood)',  key:'--c-mood'},
   {id:'fun',   name:'娱乐区',     ico:'🎮', color:'var(--c-fun)',   key:'--c-fun'},
   {id:'cloud', name:'云同步',     ico:'☁️', color:'var(--c-cloud)', key:'--c-cloud'},
+  {id:'planner',name:'背诵计划',  ico:'📖', color:'var(--c-plan)',  key:'--c-plan'},
   {id:'progress', name:'进度概览', ico:'📊', color:'var(--c-prog)',  key:'--c-prog'},
 ];
 
@@ -719,6 +721,20 @@ const DEFAULT_STATE = {
   mySent:[],               // 用户自己添加的长难句及分析结果
   sync:{code:'',on:false,lastAt:0,status:'',err:'',firstSync:false}, // 云同步配置（本机保留，不被远端覆盖）
   gh:{token:'',owner:'',repo:'',path:'data.json',on:false,lastAt:0,msg:''}, // GitHub 备份配置（本机保留）
+  planner:{ // 背诵计划生成器
+    name:'考研阅读背诵计划表',  // 计划名
+    naming:'trad',   // 命名模式：trad(传统 L1~2) | year(年份+Text)
+    listName:'L',    // List 前缀名
+    startYear:2010, // 起始年份
+    perYear:4,      // 每年篇数
+    years:11,       // 年数
+    startDate:'',   // 开始日期 yyyy-mm-dd
+    perDay:2,       // 每天数量
+    reverse:false,  // 是否逆序
+    intervals:[0,1,3,7,14,29], // 复习间隔（天）
+    done:{},        // 打卡记录 {itemKey: true}
+    savedPlans:[],  // 保存的多个计划
+  },
 };
 let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
 // 合并已存
@@ -970,7 +986,7 @@ function showModule(id){
     home:renderHome, cal:renderCal, task:renderTask, know:renderKnow,
     pol:renderPol, eng:renderEng, word:renderWord, art:renderArt,
     sent:renderSent, school:renderSchool, mood:renderMood, fun:renderFun,
-    cloud:renderCloud, progress:renderProgress,
+    cloud:renderCloud, progress:renderProgress, planner:renderPlanner,
   };
   (map[id]||renderHome)(main);
   $('#side').innerHTML=renderSide();
@@ -5294,6 +5310,442 @@ async function syncNow(forcePull){
   persist();
   const st=$('#syncStatus'); if(st) st.textContent=syncStatusText();
 }
+
+/* ==================== 背诵计划生成器 ==================== */
+function renderPlanner(main){
+  const p = state.planner || {};
+  // 确保默认值
+  p.name = p.name || '考研阅读背诵计划表';
+  p.naming = p.naming || 'trad';
+  p.listName = p.listName || 'L';
+  p.startYear = p.startYear || 2010;
+  p.perYear = p.perYear || 4;
+  p.years = p.years || 11;
+  p.startDate = p.startDate || '';
+  p.perDay = p.perDay || 2;
+  p.reverse = p.reverse || false;
+  p.intervals = p.intervals || [0,1,3,7,14,29];
+  p.done = p.done || {};
+  p.savedPlans = p.savedPlans || [];
+
+  main.innerHTML = `
+  <style>
+  .planner-config{background:var(--paper2);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
+  .planner-config h3{margin:0 0 10px;font-size:16px}
+  .planner-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:520px){.planner-grid{grid-template-columns:1fr}}
+  .planner-field{display:flex;flex-direction:column;gap:4px}
+  .planner-field label{font-size:12px;color:var(--ink-soft);font-weight:600}
+  .planner-field input,.planner-field select{padding:6px 10px;border:1px solid var(--line);border-radius:8px;font-size:14px;background:#fff}
+  .planner-interval{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .planner-interval input{width:50px;text-align:center;padding:4px 6px;border:1px solid var(--line);border-radius:6px;font-size:13px}
+  .planner-result{margin-top:16px}
+  .plan-table{width:100%;border-collapse:collapse;font-size:13px}
+  .plan-table th{background:var(--c-plan);color:#fff;padding:8px 6px;text-align:center;font-weight:600;border-radius:6px 6px 0 0}
+  .plan-table th:first-child{border-radius:6px 0 0 0}
+  .plan-table th:last-child{border-radius:0 6px 0 0}
+  .plan-table td{padding:6px;border:1px solid var(--line);text-align:center;vertical-align:top}
+  .plan-table .date-col{white-space:nowrap;font-weight:600;color:var(--ink);background:var(--paper2);min-width:70px}
+  .plan-table .new-item{font-weight:600;color:var(--c-plan)}
+  .plan-table .review-item{color:var(--ink-soft);font-size:12px}
+  .plan-table .review-item:before{content:'↻ '}
+  .plan-table .done-item{text-decoration:line-through;opacity:.5}
+  .plan-table .today-row{background:#FFF6D8 !important}
+  .plan-table .day-label{font-size:11px;color:var(--ink-soft);font-weight:400}
+  .plan-checkbox{width:18px;height:18px;cursor:pointer;accent-color:var(--c-plan)}
+  .plan-stat{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+  .plan-stat .stat-card{background:var(--paper2);border:1px solid var(--line);border-radius:10px;padding:8px 14px;text-align:center}
+  .plan-stat .stat-card b{font-size:20px;color:var(--c-plan)}
+  .plan-stat .stat-card span{font-size:11px;color:var(--ink-soft);display:block}
+  .plan-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .plan-saved{background:var(--paper2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin:6px 0;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .plan-saved .name{font-weight:600;font-size:14px}
+  .plan-saved .meta{font-size:11px;color:var(--ink-soft)}
+  .naming-preview{font-size:12px;color:var(--ink-soft);background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:4px 8px;margin-top:2px}
+  </style>
+
+  <div class="panel">
+    <div class="spread">
+      <h2 style="margin:0">📖 背诵计划生成器</h2>
+      <span class="muted" style="font-size:12px">基于艾宾浩斯遗忘曲线</span>
+    </div>
+    <div class="sub" style="margin-top:4px">自定义参数 → 生成计划表 → 每日打卡跟踪</div>
+
+    <div class="planner-config" style="margin-top:14px">
+      <h3>⚙️ 计划参数</h3>
+      <div class="planner-grid">
+        <div class="planner-field">
+          <label>计划名</label>
+          <input type="text" id="plName" value="${p.name}" placeholder="如：考研阅读背诵计划表">
+        </div>
+        <div class="planner-field">
+          <label>命名模式</label>
+          <select id="plNaming" onchange="plUpdatePreview()">
+            <option value="trad" ${p.naming==='trad'?'selected':''}>传统（L 1~2）</option>
+            <option value="year" ${p.naming==='year'?'selected':''}>年份+Text</option>
+          </select>
+          <div class="naming-preview" id="plPreview"></div>
+        </div>
+        <div class="planner-field">
+          <label>List 名（前缀）</label>
+          <input type="text" id="plListName" value="${p.listName}" placeholder="如：L">
+        </div>
+        <div class="planner-field">
+          <label>起始年份</label>
+          <input type="number" id="plStartYear" value="${p.startYear}" min="2000" max="2030">
+        </div>
+        <div class="planner-field">
+          <label>每年篇数</label>
+          <input type="number" id="plPerYear" value="${p.perYear}" min="1" max="20">
+        </div>
+        <div class="planner-field">
+          <label>年数</label>
+          <input type="number" id="plYears" value="${p.years}" min="1" max="30">
+        </div>
+        <div class="planner-field">
+          <label>开始日期</label>
+          <input type="date" id="plStartDate" value="${p.startDate}">
+        </div>
+        <div class="planner-field">
+          <label>每天数量</label>
+          <input type="number" id="plPerDay" value="${p.perDay}" min="1" max="10">
+        </div>
+      </div>
+      <div class="planner-field" style="margin-top:10px">
+        <label>复习间隔（天，用逗号分隔）</label>
+        <input type="text" id="plIntervals" value="${p.intervals.join(',')}" placeholder="0,1,3,7,14,29">
+      </div>
+      <div class="planner-field" style="margin-top:8px">
+        <label><input type="checkbox" id="plReverse" ${p.reverse?'checked':''} style="width:auto;margin-right:4px">逆序（从最后一篇开始）</label>
+      </div>
+      <div class="plan-actions">
+        <button class="btn" style="background:var(--c-plan);color:#fff" onclick="plGenerate()">📋 生成计划表</button>
+        <button class="btn ghost sm" onclick="plSavePlan()">💾 保存当前计划</button>
+        <button class="btn ghost sm" onclick="plPrint()">🖨️ 打印</button>
+      </div>
+    </div>
+
+    ${p.savedPlans.length ? `
+    <div style="margin-top:14px">
+      <h3 style="font-size:14px;margin-bottom:6px">📂 已保存的计划</h3>
+      ${p.savedPlans.map((sp,i)=>`
+        <div class="plan-saved">
+          <div>
+            <div class="name">${sp.name}</div>
+            <div class="meta">${sp.naming==='year'?'年份+Text':'传统'} · ${sp.startYear}~${sp.startYear+sp.years-1} · ${sp.perYear*sp.years}篇 · 每天${sp.perDay}篇</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn ghost sm" onclick="plLoadPlan(${i})">载入</button>
+            <button class="btn ghost sm" onclick="plDeletePlan(${i})">删除</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>` : ''}
+
+    <div class="planner-result" id="plResult">
+      ${p.startDate ? plBuildTableHTML(p) : '<div class="muted" style="text-align:center;padding:40px 0">设置参数并点击「生成计划表」</div>'}
+    </div>
+  </div>`;
+
+  plUpdatePreview();
+}
+
+function plUpdatePreview(){
+  const naming=$('#plNaming');
+  const preview=$('#plPreview');
+  const listName=($('#plListName')||{}).value||'L';
+  const startYear=parseInt(($('#plStartYear')||{}).value)||2010;
+  if(!naming||!preview) return;
+  if(naming.value==='year'){
+    preview.textContent='示例：'+startYear+'年 text1 text2';
+  }else{
+    preview.textContent='示例：'+listName+' 1~'+listName+' 2';
+  }
+}
+
+function plGetConfig(){
+  return {
+    name: ($('#plName')||{}).value || '背诵计划',
+    naming: ($('#plNaming')||{}).value || 'trad',
+    listName: ($('#plListName')||{}).value || 'L',
+    startYear: parseInt(($('#plStartYear')||{}).value) || 2010,
+    perYear: parseInt(($('#plPerYear')||{}).value) || 4,
+    years: parseInt(($('#plYears')||{}).value) || 11,
+    startDate: ($('#plStartDate')||{}).value || '',
+    perDay: parseInt(($('#plPerDay')||{}).value) || 2,
+    reverse: ($('#plReverse')||{}).checked || false,
+    intervals: (($('#plIntervals')||{}).value||'0,1,3,7,14,29').split(',').map(s=>parseInt(s.trim())||0).filter(n=>n>=0),
+  };
+}
+
+function plGenerate(){
+  const cfg = plGetConfig();
+  if(!cfg.startDate){ toast('请选择开始日期'); return; }
+  if(!cfg.intervals.length){ toast('请填写复习间隔'); return; }
+  const total = cfg.perYear * cfg.years;
+  if(total < 1){ toast('总篇数至少 1 篇'); return; }
+
+  // 保存到 state
+  state.planner = Object.assign({}, state.planner, cfg);
+  state.planner.done = state.planner.done || {};
+  persist();
+
+  // 重新渲染
+  renderPlanner($('#main'));
+  toast('✅ 计划表已生成');
+}
+
+/* 生成所有项目名称 */
+function plGenItems(cfg){
+  const items=[];
+  for(let y=0; y<cfg.years; y++){
+    const year = cfg.startYear + y;
+    for(let t=0; t<cfg.perYear; t++){
+      if(cfg.naming==='year'){
+        items.push(year+'年 text'+(t+1));
+      }else{
+        // 传统模式：全局编号
+        items.push(cfg.listName+' '+(y*cfg.perYear+t+1));
+      }
+    }
+  }
+  if(cfg.reverse) items.reverse();
+  return items;
+}
+
+/* 生成计划表数据：每天的学习和复习 */
+function plBuildSchedule(cfg){
+  const items = plGenItems(cfg);
+  const total = items.length;
+  const perDay = cfg.perDay;
+  const newDays = Math.ceil(total / perDay); // 新学天数
+  const intervals = cfg.intervals;
+  const startMs = new Date(cfg.startDate+'T00:00:00').getTime();
+  const DAY = 86400000;
+
+  // 每个项目的学习日（第几天学的）
+  const itemLearnDay = []; // itemIndex -> dayIndex (0-based)
+  for(let i=0; i<total; i++){
+    itemLearnDay.push(Math.floor(i / perDay)); // 第几个新学日
+  }
+
+  // 计算每个项目每次复习的日期
+  // schedule[dayIndex] = { newItems:[], reviews:[] }
+  const schedule = {};
+  // 先安排新学
+  for(let i=0; i<total; i++){
+    const d = itemLearnDay[i];
+    if(!schedule[d]) schedule[d] = { date: new Date(startMs + d*DAY), newItems:[], reviews:[] };
+    schedule[d].newItems.push(items[i]);
+  }
+  // 安排复习
+  for(let i=0; i<total; i++){
+    const learnDay = itemLearnDay[i];
+    intervals.forEach(interval => {
+      if(interval === 0) return; // 当天复习就是新学本身，跳过
+      const reviewDay = learnDay + interval;
+      if(!schedule[reviewDay]) schedule[reviewDay] = { date: new Date(startMs + reviewDay*DAY), newItems:[], reviews:[] };
+      schedule[reviewDay].reviews.push(items[i]);
+    });
+  }
+
+  // 转成排序数组
+  const days = Object.keys(schedule).map(Number).sort((a,b)=>a-b);
+  return { days, schedule, total, perDay, newDays, items };
+}
+
+function plItemKey(dateStr, itemName){
+  return dateStr + '|' + itemName;
+}
+
+function plBuildTableHTML(cfg){
+  const { days, schedule, total, newDays } = plBuildSchedule(cfg);
+  const today = todayStr();
+  const done = state.planner.done || {};
+
+  // 统计
+  let totalTasks = 0, doneCount = 0;
+  days.forEach(d => {
+    const s = schedule[d];
+    const dateStr = plDateStr(s.date);
+    s.newItems.forEach(item => {
+      totalTasks++;
+      if(done[plItemKey(dateStr, item)]) doneCount++;
+    });
+    s.reviews.forEach(item => {
+      totalTasks++;
+      if(done[plItemKey(dateStr, item)]) doneCount++;
+    });
+  });
+
+  // 生成表格行
+  const rows = days.map(d => {
+    const s = schedule[d];
+    const dateStr = plDateStr(s.date);
+    const isToday = dateStr === today;
+    const dayLabel = ['日','一','二','三','四','五','六'][s.date.getDay()];
+
+    const newCells = s.newItems.map(item => {
+      const key = plItemKey(dateStr, item);
+      const isDone = done[key];
+      totalTasks;
+      return `<div class="${isDone?'done-item':'new-item'}">
+        <input type="checkbox" class="plan-checkbox" ${isDone?'checked':''} onchange="plToggle('${dateStr}','${item.replace(/'/g,"\\'")}', this.checked)">
+        <span>${item}</span>
+      </div>`;
+    }).join('');
+
+    const reviewCells = s.reviews.map(item => {
+      const key = plItemKey(dateStr, item);
+      const isDone = done[key];
+      return `<div class="${isDone?'done-item':'review-item'}">
+        <input type="checkbox" class="plan-checkbox" ${isDone?'checked':''} onchange="plToggle('${dateStr}','${item.replace(/'/g,"\\'")}', this.checked)">
+        <span>${item}</span>
+      </div>`;
+    }).join('');
+
+    const cellContent = (newCells ? newCells : '') + (reviewCells ? reviewCells : '');
+    if(!cellContent) return '';
+
+    return `<tr class="${isToday?'today-row':''}">
+      <td class="date-col">${dateStr}<br><span class="day-label">周${dayLabel}</span></td>
+      <td>${cellContent}</td>
+    </tr>`;
+  }).filter(r => r).join('');
+
+  return `
+    <div class="plan-stat">
+      <div class="stat-card"><b>${total}</b><span>总篇数</span></div>
+      <div class="stat-card"><b>${newDays}</b><span>新学天数</span></div>
+      <div class="stat-card"><b>${days.length}</b><span>总天数</span></div>
+      <div class="stat-card"><b>${doneCount}/${totalTasks}</b><span>完成进度</span></div>
+    </div>
+    <table class="plan-table">
+      <thead><tr><th style="width:80px">日期</th><th>学习 / 复习内容</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+function plDateStr(date){
+  const y=date.getFullYear();
+  const m=String(date.getMonth()+1).padStart(2,'0');
+  const d=String(date.getDate()).padStart(2,'0');
+  return y+'-'+m+'-'+d;
+}
+
+function plToggle(dateStr, item, checked){
+  const key = plItemKey(dateStr, item);
+  if(!state.planner.done) state.planner.done = {};
+  if(checked){
+    state.planner.done[key] = true;
+  }else{
+    delete state.planner.done[key];
+  }
+  persist();
+  // 局部刷新统计
+  const result = $('#plResult');
+  if(result){
+    result.innerHTML = plBuildTableHTML(state.planner);
+  }
+}
+
+function plSavePlan(){
+  const cfg = plGetConfig();
+  if(!cfg.startDate){ toast('请先设置开始日期'); return; }
+  if(!state.planner.savedPlans) state.planner.savedPlans = [];
+  // 检查是否已存在同名
+  const existing = state.planner.savedPlans.findIndex(p => p.name === cfg.name);
+  if(existing >= 0){
+    state.planner.savedPlans[existing] = Object.assign({}, cfg);
+    toast('已更新计划「'+cfg.name+'」');
+  }else{
+    state.planner.savedPlans.push(Object.assign({}, cfg));
+    toast('已保存计划「'+cfg.name+'」');
+  }
+  persist();
+  renderPlanner($('#main'));
+}
+
+function plLoadPlan(i){
+  const sp = (state.planner.savedPlans||[])[i];
+  if(!sp) return;
+  state.planner = Object.assign({}, state.planner, sp);
+  state.planner.done = state.planner.done || {};
+  persist();
+  renderPlanner($('#main'));
+  toast('已载入计划「'+sp.name+'」');
+}
+
+function plDeletePlan(i){
+  if(!state.planner.savedPlans) return;
+  state.planner.savedPlans.splice(i, 1);
+  persist();
+  renderPlanner($('#main'));
+  toast('已删除');
+}
+
+function plPrint(){
+  const cfg = state.planner;
+  if(!cfg.startDate){ toast('请先生成计划表'); return; }
+  const { days, schedule, total, newDays } = plBuildSchedule(cfg);
+  const done = state.planner.done || {};
+  const today = todayStr();
+
+  let rows = days.map(d => {
+    const s = schedule[d];
+    const dateStr = plDateStr(s.date);
+    const isToday = dateStr === today;
+    const dayLabel = ['日','一','二','三','四','五','六'][s.date.getDay()];
+
+    const newCells = s.newItems.map(item => {
+      const key = plItemKey(dateStr, item);
+      const isDone = done[key];
+      return (isDone?'☑ ':'☐ ')+item;
+    }).join('<br>');
+
+    const reviewCells = s.reviews.map(item => {
+      const key = plItemKey(dateStr, item);
+      const isDone = done[key];
+      return (isDone?'☑ ':'☐ ')+item;
+    }).join('<br>');
+
+    const content = [newCells, reviewCells].filter(x=>x).join('<br>');
+    if(!content) return '';
+    return `<tr${isToday?' style="background:#FFF6D8"':''}>
+      <td style="white-space:nowrap;font-weight:600;padding:6px;border:1px solid #ccc">${dateStr} 周${dayLabel}</td>
+      <td style="padding:6px;border:1px solid #ccc">${content}</td>
+    </tr>`;
+  }).filter(r=>r).join('');
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${cfg.name}</title>
+  <style>
+  body{font-family:system-ui,"PingFang SC","Microsoft YaHei",sans-serif;padding:20px;color:#333}
+  h1{font-size:20px;text-align:center}
+  .meta{text-align:center;color:#888;font-size:13px;margin-bottom:16px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{background:#7b8fa4;color:#fff;padding:8px;border:1px solid #999}
+  td{padding:6px;border:1px solid #ccc;vertical-align:top}
+  .new{font-weight:600}
+  .rev{color:#888;font-size:12px}
+  .rev:before{content:'↻ '}
+  @media print{button{display:none}}
+  </style></head><body>
+  <h1>${cfg.name}</h1>
+  <div class="meta">${cfg.naming==='year'?'年份+Text模式':'传统模式'} · ${cfg.startYear}~${cfg.startYear+cfg.years-1} · 共${total}篇 · 每天${cfg.perDay}篇 · 新学${newDays}天</div>
+  <button onclick="window.print()" style="margin-bottom:10px;padding:6px 16px;background:#7b8fa4;color:#fff;border:none;border-radius:8px;cursor:pointer">🖨️ 打印</button>
+  <table><thead><tr><th>日期</th><th>学习/复习内容</th></tr></thead><tbody>${rows}</tbody></table>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  if(w){
+    w.document.write(html);
+    w.document.close();
+  }else{
+    toast('请允许弹出窗口');
+  }
+}
+
 function renderCloud(main){
   const s=state.sync||{};
   const g=ghCfg();
