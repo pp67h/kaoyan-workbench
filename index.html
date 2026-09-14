@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.9.4-->
+<!--APP_VER:2026.9.5-->
 <style>
 :root{
   --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
@@ -5312,7 +5312,6 @@ async function syncNow(forcePull){
 }
 
 /* ==================== 背诵计划生成器 ==================== */
-let _plNaming='trad';
 function renderPlanner(main){
   const p = state.planner || {};
   // 确保默认值
@@ -5380,11 +5379,12 @@ function renderPlanner(main){
           <input type="text" id="plName" value="${p.name}" placeholder="如：考研阅读背诵计划表">
         </div>
         <div class="planner-field" style="grid-column:1/-1">
-          <label>命名模式</label>
-          <div style="display:flex;gap:8px;margin-top:2px">
-            <button type="button" id="plBtnTrad" class="btn sm ${p.naming!=='year'?'':''}" style="flex:1;${p.naming!=='year'?'background:var(--c-plan);color:#fff':'background:var(--paper2);border:1px solid var(--line)'}" onclick="plSetNaming('trad')">传统（L 1~2）</button>
-            <button type="button" id="plBtnYear" class="btn sm ${p.naming==='year'?'':''}" style="flex:1;${p.naming==='year'?'background:var(--c-plan);color:#fff':'background:var(--paper2);border:1px solid var(--line)'}" onclick="plSetNaming('year')">年份+Text（2010年 text1）</button>
+          <label>命名模式（选择生成哪种计划表）</label>
+          <div style="display:flex;gap:8px;margin-top:2px" id="plNamingBtns">
+            <button type="button" id="plBtnTrad" class="btn sm" style="flex:1;${p.naming!=='year'?'background:var(--c-plan);color:#fff;border:none':'background:var(--paper2);border:1px solid var(--line)'}" onclick="plSetNaming('trad')">📋 传统（L 1~2）</button>
+            <button type="button" id="plBtnYear" class="btn sm" style="flex:1;${p.naming==='year'?'background:var(--c-plan);color:#fff;border:none':'background:var(--paper2);border:1px solid var(--line)'}" onclick="plSetNaming('year')">📅 年份+Text（2010年 text1）</button>
           </div>
+          <input type="hidden" id="plNamingHidden" value="${p.naming||'trad'}">
           <div class="naming-preview" id="plPreview"></div>
         </div>
         <div class="planner-field">
@@ -5449,12 +5449,12 @@ function renderPlanner(main){
   </div>`;
 
   plUpdatePreview();
-  _plNaming = p.naming || 'trad';
 }
 
 function plSetNaming(mode){
-  _plNaming=mode;
-  const btnT=$('#plBtnTrad'), btnY=$('#plBtnYear');
+  var h=$('#plNamingHidden');
+  if(h) h.value=mode;
+  var btnT=$('#plBtnTrad'), btnY=$('#plBtnYear');
   if(btnT){
     if(mode==='trad'){ btnT.style.background='var(--c-plan)'; btnT.style.color='#fff'; btnT.style.border='none'; }
     else { btnT.style.background='var(--paper2)'; btnT.style.color=''; btnT.style.border='1px solid var(--line)'; }
@@ -5466,31 +5466,34 @@ function plSetNaming(mode){
   plUpdatePreview();
   // 如果已有计划，自动重新生成
   if(state.planner && state.planner.startDate){
-    const cfg=plGetConfig();
+    var cfg=plGetConfig();
     Object.assign(state.planner, cfg);
     persist();
-    const result=$('#plResult');
+    var result=$('#plResult');
     if(result) result.innerHTML=plBuildTableHTML(state.planner);
+    toast(mode==='year'?'已切换为年份+Text模式，计划表已更新':'已切换为传统模式，计划表已更新');
   }
 }
 
 function plUpdatePreview(){
-  const naming=_plNaming||(state.planner||{}).naming||'trad';
-  const preview=$('#plPreview');
-  const listName=($('#plListName')||{}).value||'L';
-  const startYear=parseInt(($('#plStartYear')||{}).value)||2010;
+  var h=$('#plNamingHidden');
+  var naming=(h&&h.value)||'trad';
+  var preview=$('#plPreview');
+  var listName=($('#plListName')||{}).value||'L';
+  var startYear=parseInt(($('#plStartYear')||{}).value)||2010;
   if(!preview) return;
   if(naming==='year'){
-    preview.textContent='示例：'+startYear+'年 text1 text2';
+    preview.textContent='示例：'+startYear+'年 text1、'+startYear+'年 text2 …';
   }else{
-    preview.textContent='示例：'+listName+' 1~'+listName+' 2';
+    preview.textContent='示例：'+listName+' 1、'+listName+' 2、'+listName+' 3 …';
   }
 }
 
 function plGetConfig(){
+  var h=$('#plNamingHidden');
   return {
     name: ($('#plName')||{}).value || '背诵计划',
-    naming: _plNaming || 'trad',
+    naming: (h&&h.value) || 'trad',
     listName: ($('#plListName')||{}).value || 'L',
     startYear: parseInt(($('#plStartYear')||{}).value) || 2010,
     perYear: parseInt(($('#plPerYear')||{}).value) || 4,
@@ -5498,7 +5501,7 @@ function plGetConfig(){
     startDate: ($('#plStartDate')||{}).value || '',
     perDay: parseInt(($('#plPerDay')||{}).value) || 2,
     reverse: ($('#plReverse')||{}).checked || false,
-    intervals: (($('#plIntervals')||{}).value||'0,1,3,7,14,29').split(',').map(s=>parseInt(s.trim())||0).filter(n=>n>=0),
+    intervals: (($('#plIntervals')||{}).value||'0,1,3,7,14,29').split(',').map(function(s){return parseInt(s.trim())||0}).filter(function(n){return n>=0}),
   };
 }
 
