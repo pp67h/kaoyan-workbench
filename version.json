@@ -1,13 +1,12 @@
 {
-  "version": "v32",
-  "date": "2026-08-21",
+  "version": "v33",
+  "date": "2026-10-04",
   "size": "约 40MB",
-  "apk": "https://github.com/pp67h/kaoyan-workbench/releases/download/v32/kaoyan-workbench-v32.apk",
+  "apk": "https://github.com/pp67h/kaoyan-workbench/releases/download/v33/kaoyan-workbench-v33.apk",
   "changelog": [
-    "🆕 v32 换用新签名，全新安装包（需先卸载 v31，仅此一次）",
-    "📐 每日学习时间卡片：前一天 / 今天 / 后一天 三键分列左·中·右，累计时长单独一行",
-    "📐 每日任务卡片：标题独占一行不再被挤掉，日期导航左·中·右排布",
-    "📐 英语 / 政治计数器：一排放不下自动换行到第二排，靠左对齐",
-    "🔄 以后更新：装好 v32 后，云同步页点「一键更新」自动下载自动弹安装"
+    "🔧 修复加载器：旧版 loader 无法执行远程脚本，导致一直显示旧版，新版已修复",
+    "📖 新增「今日背诵」侧栏面板：首页直接显示今日新学+复习任务，可勾选打卡",
+    "📅 页面版本更新至 v2026.10.5",
+    "⚠️ 本版使用新签名证书，需先卸载 v32 再安装（数据可通过云同步恢复）"
   ]
 }
