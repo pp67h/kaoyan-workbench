@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.10.4-->
+<!--APP_VER:2026.10.5-->
 <style>
 :root{
   --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
@@ -5311,6 +5311,577 @@ async function syncNow(forcePull){
   const st=$('#syncStatus'); if(st) st.textContent=syncStatusText();
 }
 
+
+/* ===== App 版本更新（APK 一键更新）===== */
+var APK_VER_URL=SITE_BASE+'/version.json';
+var APK_DEFAULT_INSTALLED='v30'; /* 功能上线前最后发出去的 APK 版本 */
+function apkInstalled(){
+  try{ return localStorage.getItem('apkInstalled')||APK_DEFAULT_INSTALLED; }catch(_){ return APK_DEFAULT_INSTALLED; }
+}
+async function apkCheck(){
+  var box=document.getElementById('apkBox'); if(!box) return;
+  box.innerHTML='<div class="sub" style="margin:8px 0 0">⏳ 正在检查新版本…</div>';
+  try{
+    var r=await fetch(APK_VER_URL+'?t='+Date.now(),{cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    var v=await r.json();
+    if(!v||!v.version) throw new Error('版本信息不完整');
+    window.__apkLatest=v;
+    try{ localStorage.setItem('__apkChk',String(Date.now())); }catch(_){}
+    apkRender(v);
+  }catch(e){
+    box.innerHTML='<div class="sub" style="margin:8px 0 0">❌ 检查失败（'+e.message+'），需联网，稍后再试</div>';
+  }
+}
+function apkRender(v){
+  var box=document.getElementById('apkBox'); if(!box||!v) return;
+  var mine=apkInstalled();
+  var same=(mine===v.version);
+  var url=/^https?:/.test(v.apk||'') ? v.apk : SITE_BASE+'/'+(v.apk||'latest.apk');
+  var pill=document.getElementById('apkMinePill');
+  if(pill) pill.textContent='已装 '+mine;
+  box.innerHTML=
+    '<div class="row" style="margin-top:8px;align-items:center">'+
+      '<span class="pill">最新 '+v.version+'</span>'+
+      (same
+        ?'<span class="pill" style="background:#d8e8be;color:#4a6b3a">✓ 已是最新</span>'
+        :'<span class="pill" style="background:#f7e0d8;color:#b05a3e">🆕 有新版</span>')+
+      '<span class="muted" style="font-size:11px">'+(v.date||'')+'</span>'+
+    '</div>'+
+    '<div style="font-size:12.5px;margin-top:6px;line-height:1.7;color:var(--ink)">'+(v.changelog||[]).map(function(c){return '· '+c;}).join('<br>')+'</div>'+
+    '<div class="row" style="margin-top:8px">'+
+      '<a class="btn sm" style="text-decoration:none" href="'+url+'" target="_blank" rel="noopener">⬇️ 下载新 APK'+(v.size?'（'+v.size+'）':'')+'</a>'+
+      '<button class="btn ghost sm" onclick="apkCopyLink(\''+url+'\')">📋 复制链接</button>'+
+      (same?'':'<button class="btn ghost sm" onclick="apkMark(\''+v.version+'\')">✓ 装好后点此标记</button>')+
+    '</div>'+
+    '<div class="sub" style="margin:8px 0 0">下载完成后下拉通知栏点安装；首次需允许「安装未知应用」。若按钮没反应，点「复制链接」用浏览器打开。</div>';
+}
+function apkMark(ver){
+  try{ localStorage.setItem('apkInstalled',ver); }catch(_){}
+  toast('✓ 已标记 '+ver+' 为当前版本');
+  apkRender(window.__apkLatest);
+  var pill=document.getElementById('apkMinePill'); if(pill) pill.textContent='已装 '+ver;
+}
+function apkCopyLink(url){
+  try{
+    var i=document.createElement('input'); i.value=url;
+    document.body.appendChild(i); i.select(); i.setSelectionRange(0,99999);
+    document.execCommand('copy'); i.remove();
+    toast('✓ 链接已复制，粘贴到浏览器即可下载');
+  }catch(e){ toast(url); }
+}
+function renderCloud(main){
+  const s=state.sync||{};
+  const g=ghCfg();
+  let html=`
+  <div class="panel">
+    <div class="spread"><h3 style="margin-top:0">📦 App 版本更新</h3><span class="pill" id="apkMinePill">${apkInstalled()?'已装 '+apkInstalled():'未记录'}</span></div>
+    <div class="row" style="margin-top:6px">
+      <button class="btn sm" onclick="apkCheck()">🔍 检查更新</button>
+      <span class="muted" style="font-size:11px">网页内容更新是全自动的；这里只更新 App 本体（新 APK）</span>
+    </div>
+    <div id="apkBox"></div>
+  </div>
+  <div class="panel">
+    <div class="spread"><h3 style="margin-top:0">🐙 GitHub 自动备份（推荐）</h3><span class="pill">${g.on?'已开启':'未开启'}</span></div>
+    <div class="sub">数据存在<b>你自己的 GitHub 私有仓库</b>；照片仅保存在本机</div>
+    <div class="row" style="margin-top:8px;align-items:center">
+      <input type="text" id="ghOwner" placeholder="GitHub 用户名" value="${(g.owner)||''}" style="flex:1" oninput="ghSet('owner',this.value)">
+      <input type="text" id="ghRepo" placeholder="仓库名" value="${(g.repo)||''}" style="flex:1" oninput="ghSet('repo',this.value)">
+    </div>
+    <div class="row" style="margin-top:6px;align-items:center">
+      <input type="password" id="ghToken" placeholder="Personal Access Token" value="${(g.token)||''}" style="flex:1" oninput="ghSet('token',this.value)">
+      <input type="text" id="ghPath" placeholder="文件名 data.json" value="${(g.path)||'data.json'}" style="flex:1" oninput="ghSet('path',this.value)">
+    </div>
+    <div class="row" style="margin-top:8px;gap:8px">
+      <button class="btn sm" id="ghBtn" onclick="ghToggle()">${g.on?'⏸ 关闭自动备份':'▶ 开启自动备份'}</button>
+      <button class="btn sm" style="flex:1" onclick="ghBackup()">📤 备份到 GitHub</button>
+      <button class="btn ghost sm" style="flex:1" onclick="ghRestore()">📥 从 GitHub 恢复</button>
+    </div>
+    <div class="muted" style="font-size:12px;margin-top:6px" id="ghStatus">${ghStatusText()}</div>
+    <div class="row" style="margin-top:8px;gap:8px">
+      <button class="btn ghost sm" style="flex:1" onclick="snapRestore()">🛟 恢复到最近快照</button>
+    </div>
+  </div>
+  <div class="panel">
+    <h3 style="margin-top:0">⚙️ 数据管理</h3>
+    <div class="row" style="margin-top:6px">
+      <button class="btn ghost sm" onclick="exportBackup()">本地导出</button>
+      <div class="upload-wrap"><span class="btn ghost sm" style="cursor:pointer">本地导入</span><input type="file" id="impFile" accept="*/*" onchange="importBackup(this)"></div>
+    </div>
+  </div>`;
+  main.innerHTML=html;
+  /* 进入云同步页自动检查一次 APK 更新（每天最多一次）*/
+  try{
+    var lastApkChk=+localStorage.getItem('__apkChk')||0;
+    if(Date.now()-lastApkChk>24*3600*1000) setTimeout(apkCheck,400);
+  }catch(_){}
+}
+async function cloudBackup(){
+  let code=(state.sync&&state.sync.code)||'';
+  const inp=document.getElementById('syncCode');
+  if(!code && inp){ code=(inp.value||'').trim(); if(code){ state.sync=state.sync||{code:'',on:false,lastAt:0}; state.sync.code=code; } }
+  if(!code){ toast('请先填同步码'); return; }
+  toast('📤 正在备份到后台…');
+  try{
+    let remoteState={};
+    try{
+      const r=await fetch(SYNC_BASE + '/api/sync?code='+encodeURIComponent(code));
+      if(r.ok){ const remote=await r.json(); remoteState=remote.state||{}; }
+    }catch(_){}
+    const keepSync=state.sync||{code:code,on:false,lastAt:0};
+    const merged=mergeForCloud(state, remoteState);
+    merged.sync=keepSync;
+    const resp=await fetch(SYNC_BASE + '/api/sync?code='+encodeURIComponent(code),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({state:merged})});
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const jr=await resp.json();
+    state=merged; state._mtime=jr._mtime||Date.now();
+    try{ persist(); }catch(_){}
+    toast('✅ 已备份到后台');
+  }catch(e){ toast('备份失败：'+e.message); }
+}
+async function cloudRestore(){
+  const s=state.sync; if(!s||!s.code){ toast('请先填同步码'); return; }
+  toast('📥 正在从服务器恢复…');
+  try{
+    const r=await fetch(SYNC_BASE + '/api/sync?code='+encodeURIComponent(s.code));
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const remote=await r.json();
+    const remoteState=remote.state||{};
+    snap();
+    // 智能合并（和 syncNow 一样的逐字段合并逻辑，保证新数据不被旧数据覆盖）
+    const keepSync=state.sync;
+    state.tasksDeleted=state.tasksDeleted||[];
+    const remoteDel=(remoteState.tasksDeleted)||[];
+    const mergedTasks=mergeTasks(state.tasks, remoteState.tasks, state.tasksDeleted, remoteDel);
+    const mergedDel=Array.from(new Set([...state.tasksDeleted, ...remoteDel]));
+    const merged=Object.assign({}, DEFAULT_STATE);
+    merged.eng=deepMergeMax(state.eng||{},remoteState.eng||{});
+    merged.pol=deepMergeMax(state.pol||{},remoteState.pol||{});
+    merged.vocab=deepMergeMax(state.vocab||{},remoteState.vocab||{});
+    merged.know=deepMergeMax(state.know||{},remoteState.know||{});
+    merged.studyLog=studyLogMerge(state.studyLog||{},remoteState.studyLog||{});
+    merged.studyToday=deepMergeMax(state.studyToday||{},remoteState.studyToday||{});
+    merged.studyTime=deepMergeMax(state.studyTime||{},remoteState.studyTime||{});
+    merged.monthPlan=monthPlanMerge(state.monthPlan||[],remoteState.monthPlan||[],state.monthDeleted||[],remoteState.monthDeleted||[]);
+    merged.monthDeleted=Array.from(new Set([...(state.monthDeleted||[]),...(remoteState.monthDeleted||[])]));
+    merged.weekPlan=arrayMergeByKey(state.weekPlan||[],remoteState.weekPlan||[],x=>(x.week||'')+'|'+(x.t||'').trim().toLowerCase());
+    merged.keyDates=arrayMergeByKey(state.keyDates||[],remoteState.keyDates||[],x=>(x.n||'')+'|'+(x.d||''));
+    merged.mySent=arrayMergeByKey(state.mySent||[],remoteState.mySent||[],x=>(x.en||x.s||'').trim().toLowerCase());
+    merged.mood=arrayMergeByKey(state.mood||[],remoteState.mood||[],x=>(x.date||'')+'|'+(x.mood||''));
+    merged.progressPlan=((remoteState.progressPlan||[]).length>=(state.progressPlan||[]).length?remoteState.progressPlan:state.progressPlan)||[];
+    merged.moduleOrder=(state.moduleOrder&&state.moduleOrder.length)?state.moduleOrder:(remoteState.moduleOrder||[]);
+    merged.sched=arrayMergeByKey(state.sched||[],remoteState.sched||[],x=>(x.d||'')+'|'+(x.t||''));
+    merged.dog=deepMergeMax(state.dog||{},remoteState.dog||{});
+    merged.words=deepMergeMax(state.words||{},remoteState.words||{});
+    if((state.words||{}).list&&remoteState.words&&remoteState.words.list){
+      merged.words.list=arrayMergeByKey(state.words.list,remoteState.words.list,x=>(x.en||'').toLowerCase());
+    }
+    merged.diary=Object.assign({},state.diary||{},remoteState.diary||{});
+    merged.calMile=Object.assign({},state.calMile||{},remoteState.calMile||{});
+    merged.calStat=deepMergeMax(state.calStat||{},remoteState.calStat||{});
+    const remoteMtime=remote._mtime||0;
+    const localMtime=state._mtime||0;
+    const newerFields=['examDate','taskDate','taskGen','wkPos','checkins'];
+    const base = remoteMtime>localMtime ? remoteState : state;
+    newerFields.forEach(k=>{ merged[k]=base[k]!==undefined?base[k]:state[k]; });
+    merged.tasks=mergedTasks;
+    merged.tasksDeleted=mergedDel;
+    merged.sync=keepSync;
+    merged.gh=ghCfg();
+    merged._mtime=Date.now();
+    state=merged; persist();
+    // 恢复后立即把合并结果推回云端，确保两端数据一致
+    try{
+      await fetch(SYNC_BASE + '/api/sync?code='+encodeURIComponent(s.code),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({state:merged})});
+    }catch(_){}
+    const main=document.querySelector('#main'); if(main&&current) showModule(current);
+    $('#side').innerHTML=renderSide();
+    toast('✅ 已从服务器恢复（智能合并 + 已同步回云端）');
+  }catch(e){ toast('恢复失败：'+e.message); }
+}
+/* ---------- 🐙 GitHub 自动备份（手机/平板都备份到你的 GitHub 私有仓库） ---------- */
+function ghCfg(){ state.gh=state.gh||{token:'',owner:'',repo:'',path:'data.json',on:false,lastAt:0,msg:''}; return state.gh; }
+function ghSet(k,v){ ghCfg()[k]=v; persist(); }
+function ghHeaders(){
+  return {
+    'Authorization':'Bearer '+(ghCfg().token||'').trim(),
+    'Accept':'application/vnd.github+json',
+    'X-GitHub-Api-Version':'2022-11-28',
+    'Content-Type':'application/json'
+  };
+}
+function utf8b64(str){ return btoa(unescape(encodeURIComponent(str))); }
+function b64utf8(b64){ return decodeURIComponent(escape(atob(b64))); }
+function ghUrl(){
+  const g=ghCfg();
+  return 'https://api.github.com/repos/'+encodeURIComponent((g.owner||'').trim())+'/'+encodeURIComponent((g.repo||'').trim())+'/contents/'+(g.path||'data.json');
+}
+async function ghGetFile(){
+  const r=await fetch(ghUrl(),{headers:ghHeaders()});
+  if(r.status===404) return null;
+  if(!r.ok){ let t=''; try{ t=await r.text(); }catch(_){} throw new Error('GitHub '+r.status+' '+t.slice(0,120)); }
+  const j=await r.json();
+  return {sha:j.sha, content:j.content||''};
+}
+// 外刊笔记单独存在 localStorage（artnote_N），备份时一并收集、恢复时写回
+function collectArtNotes(){
+  const out={};
+  try{ (ARTICLES||[]).forEach((_,i)=>{ const n=load('artnote_'+i,''); if(n) out[i]=n; }); }catch(_){}
+  return out;
+}
+function restoreArtNotes(map){
+  if(!map||typeof map!=='object') return;
+  for(const k in map){ try{ save('artnote_'+k, map[k]); }catch(_){} }
+}
+async function ghBackup(silent){
+  const g=ghCfg();
+  if(!g.token||!g.owner||!g.repo){ if(!silent) toast('请先填 GitHub Token / 用户名 / 仓库名'); return; }
+  if(!silent) toast('🐙 正在备份到 GitHub…');
+  try{
+    const payload=Object.assign({}, state);
+    delete payload.sync; delete payload.gh; delete payload.checkins; // 照片不进入 GitHub，避免 base64 序列化造成闪退
+    payload._artNotes=collectArtNotes(); // 外刊笔记一并纳入同步
+    const json=JSON.stringify(payload);
+    const b64=utf8b64(json);
+    const existing=await ghGetFile();
+    const body={message:'考研工作台备份 '+new Date().toLocaleString('zh-CN'), content:b64};
+    if(existing&&existing.sha) body.sha=existing.sha;
+    const r=await fetch(ghUrl(),{method:'PUT',headers:ghHeaders(),body:JSON.stringify(body)});
+    if(!r.ok){ let t=''; try{ t=await r.text(); }catch(_){} throw new Error('GitHub '+r.status+' '+t.slice(0,160)); }
+    g.lastAt=Date.now(); g.msg=''; state._mtime=Date.now(); try{ save('state',state); }catch(_){}
+    if(!silent) toast('✅ 已备份到 GitHub（文字/进度数据已上传，照片仅保存在本机）');
+  }catch(e){ g.msg='上次失败：'+e.message; if(!silent) toast('备份失败：'+e.message); }
+}
+async function ghRestore(){
+  const g=ghCfg();
+  if(!g.token||!g.owner||!g.repo){ toast('请先填 GitHub Token / 用户名 / 仓库名'); return; }
+  toast('🐙 正在从 GitHub 恢复…');
+  try{
+    const f=await ghGetFile();
+    if(!f){ toast('GitHub 仓库里还没有 data.json 备份文件'); return; }
+    const remote=JSON.parse(b64utf8(f.content.replace(/\s/g,'')));
+    if(!remote||typeof remote!=='object') throw new Error('备份文件格式异常');
+    snap();
+    const keepSync=state.sync, keepGh=ghCfg();
+    const merged=mergeForRestore(state, remote);
+    restoreArtNotes(remote._artNotes); // 外刊笔记写回本机
+    if('_artNotes' in merged) delete merged._artNotes;
+    merged.sync=keepSync; merged.gh=keepGh; merged._mtime=Date.now();
+    state=merged; persist();
+    $('#side').innerHTML=renderSide();
+    const main=document.querySelector('#main'); if(main&&current) showModule(current);
+    toast('✅ 已从 GitHub 恢复');
+  }catch(e){ toast('恢复失败：'+e.message); }
+}
+function ghToggle(){
+  const g=ghCfg(); g.on=!g.on; persist();
+  const btn=$('#ghBtn'); if(btn) btn.textContent=g.on?'⏸ 关闭自动备份':'▶ 开启自动备份';
+  const st=$('#ghStatus'); if(st) st.textContent=ghStatusText();
+  if(g.on){ if(!g.token||!g.owner||!g.repo) toast('请先把 Token / 用户名 / 仓库名填全'); else { toast('已开启：每次打卡后 2 秒自动备份到 GitHub'); ghAutoSync(); } }
+}
+function ghStatusText(){
+  const g=ghCfg();
+  if(!g.on) return '未开启。开启后每次修改数据会自动备份到 GitHub。';
+  if(g.msg) return '⚠️ '+g.msg;
+  if(g.lastAt) return '✅ 上次备份 · '+new Date(g.lastAt).toLocaleTimeString('zh-CN');
+  return '🔄 等待首次备份…';
+}
+let ghAutoTimer=null;
+function ghAutoSync(){
+  const g=state.gh;
+  if(!g||!g.on||!g.token||!g.owner||!g.repo) return;
+  if(ghAutoTimer) return;
+  ghAutoTimer=setTimeout(()=>{ ghAutoTimer=null; ghBackup(true); },2000);
+}
+function deepMerge(base, over){
+  // 递归合并：over 覆盖 base；对象逐层合并，数组/基本类型直接覆盖
+  if(Array.isArray(base)) return Array.isArray(over)?over.slice():base.slice();
+  if(base && typeof base==='object' && over && typeof over==='object'){
+    const out=Object.assign({}, base);
+    for(const k in over){ out[k]=deepMerge(base[k], over[k]); }
+    return out;
+  }
+  return (over===undefined)?base:over;
+}
+function mergeForRestore(local, remote){
+  // 全量同步：以服务器数据为准，DEFAULT_STATE 补全缺失结构
+  // 恢复后，本机与服务器（即另一台设备）数据完全一致
+  const out=deepMerge(DEFAULT_STATE, remote||{});
+  out.sync=local.sync; // 同步码/开关始终用本机的，避免被覆盖导致同步中断
+  return out;
+}
+function mergeArrayByKey(a,b,keyFn){
+  const out=[]; const seen=new Set();
+  [...(a||[]), ...(b||[])].forEach(x=>{
+    if(!x) return;
+    const k=keyFn?keyFn(x):JSON.stringify(x);
+    if(seen.has(k)) return;
+    seen.add(k); out.push(x);
+  });
+  return out;
+}
+function mergePhotoMap(local, remote){
+  const out={}; const dates=new Set([...Object.keys(local||{}), ...Object.keys(remote||{})]);
+  dates.forEach(d=>{
+    out[d]=mergeArrayByKey((remote||{})[d], (local||{})[d], x=>(x.src||'')+'|'+(x.cap||''));
+  });
+  return out;
+}
+function mergeForCloud(local, remote){
+  local=local||{}; remote=remote||{};
+  // newer 版本作为 base，older 作为 other；deepMerge(base, other) → other 覆盖 base
+  // 所以应该是 deepMerge(older, newer) 让 newer 覆盖 older
+  const newer=(remote._mtime||0)>(local._mtime||0)?remote:local;
+  const older=newer===remote?local:remote;
+  const out=deepMerge(deepMerge(DEFAULT_STATE, older), newer);
+  const localDel=local.tasksDeleted||[], remoteDel=remote.tasksDeleted||[];
+  out.tasks=mergeTasks(local.tasks, remote.tasks, localDel, remoteDel);
+  out.tasksDeleted=Array.from(new Set([...localDel, ...remoteDel]));
+  // 月计划：按时间戳合并 + 删除墓碑
+  out.monthPlan=monthPlanMerge(local.monthPlan||[],remote.monthPlan||[],local.monthDeleted||[],remote.monthDeleted||[]);
+  out.monthDeleted=Array.from(new Set([...(local.monthDeleted||[]),...(remote.monthDeleted||[])]));
+  out.checkins=mergePhotoMap(local.checkins, remote.checkins);
+  out.mood=mergeArrayByKey(remote.mood, local.mood);
+  out.mySent=mergeArrayByKey(remote.mySent, local.mySent, x=>(x.s||x.text||JSON.stringify(x)));
+  out.sync=local.sync;
+  out.gh=local.gh;
+  return out;
+}
+function resetDogIfNeeded(){
+  const today=todayStr();
+  const now=new Date();
+  const oneAM=new Date(today+'T01:00:00');
+  if(!state.dog || typeof state.dog!=='object') state.dog={phase:0,fed:0,date:today,resetDate:''};
+  if(state.dog.date!==today){ state.dog.date=today; state.dog.phase=0; state.dog.fed=0; }
+  if(now>=oneAM && state.dog.resetDate!==today){
+    state.dog.phase=0;
+    state.dog.fed=0;
+    state.dog.resetDate=today;
+    persist();
+  }
+}
+function pangpangLevel(pct){
+  if(pct>=100) return 4;
+  if(pct>=70) return 3;
+  if(pct>=35) return 2;
+  if(pct>0) return 1;
+  return 0;
+}
+const PANGPANG_STAGE_ASSETS=[
+  {label:'趴着等你',idle:'pangpang_stage_0_idle.mp4',tap:'pangpang_stage_0_tap.mp4',advance:'pangpang_stage_0_advance.mp4',fallback:'pangpang_stage_0.mp4'},
+  {label:'歪坐傲娇',idle:'pangpang_stage_1_idle.mp4',tap:'pangpang_stage_1_tap.mp4',advance:'pangpang_stage_1_advance.mp4',fallback:'pangpang_stage_1.mp4'},
+  {label:'认真陪学',idle:'pangpang_stage_2_idle.mp4',tap:'pangpang_stage_2_tap.mp4',advance:'pangpang_stage_2_advance.mp4',fallback:'pangpang_pet_loop.mp4'},
+  {label:'准备站起',idle:'pangpang_stage_3_idle.mp4',tap:'pangpang_stage_3_tap.mp4',advance:'pangpang_stage_3_advance.mp4',fallback:'pangpang_pet_loop.mp4'},
+  {label:'热乎乎满状态',idle:'pangpang_stage_4_idle.mp4',tap:'pangpang_stage_4_tap.mp4',advance:'pangpang_stage_4_advance.mp4',fallback:'pangpang_pet_loop.mp4'}
+];
+function pangpangRestState(now=new Date()){
+  const h=now.getHours();
+  const m=now.getMinutes();
+  const mins=h*60+m;
+  if(mins<7*60) return {type:'sleep', label:'睡觉中', idle:'pangpang_sleep_noon_idle.mp4', tap:'pangpang_sleep_noon_tap.mp4', fallback:'pangpang_pet_loop.mp4', msg:'现在是胖胖夜间睡觉的时间。她会趴着睡,被点到也只是迷迷糊糊抬一下眼。'};
+  if(mins>=12*60 && mins<14*60) return {type:'nap', label:'午睡中', idle:'pangpang_doze_sitting_idle.mp4', tap:'pangpang_doze_sitting_tap.mp4', fallback:'pangpang_pet_loop.mp4', msg:'现在是胖胖午睡时间。她坐着打瞌睡,像上课犯困一样小鸡啄米。'};
+  return null;
+}
+function pangpangStats(){
+  const d=todayStr(); ensureTasks(d);
+  const tasks=state.tasks[d]||[];
+  const done=tasks.filter(t=>t.status==='done').length;
+  const pct=tasks.length?Math.round(done/tasks.length*100):0;
+  const unlocked=Math.min(4, Math.max(done, pangpangLevel(pct)));
+  return {d,tasks,done,pct,unlocked};
+}
+function pangpangMessage(pct, phase){
+  const rest=pangpangRestState();
+  if(rest){
+    const fed=phase>0?` 今天已经收到 ${phase} 个小奖励,醒了会继续陪你。`:'';
+    return rest.msg+fed;
+  }
+  const lv=pangpangLevel(pct);
+  const msgs=[
+    '胖胖趴在旁边等你完成第一条任务。完成任务才能喂她哦。',
+    '胖胖已经坐起来啦。完成的任务越多,她越有精神。',
+    '胖胖在认真看你推进任务。再完成几条,她会更开心。',
+    '胖胖开心地歪头看你。今天任务完成度很不错。',
+    '胖胖满状态陪学中。今天完成的任务她都看见了,你真的很棒。'
+  ];
+  const base=msgs[lv];
+  const fed=phase>0?` 已收到 ${phase} 个小奖励。`:'';
+  return base+fed;
+}
+function pangpangSnackName(i){
+  return ['一小口鸡胸肉','一颗小饼干','一次摸摸头','一个大大的贴贴'][Math.max(0,Math.min(3,i))];
+}
+let pangpangBusy=false;
+function feedDog(){ pangpangTap(); }
+function pangpangTap(){
+  resetDogIfNeeded();
+  if(pangpangBusy) return;
+  const st=pangpangStats();
+  const rest=pangpangRestState();
+  const phase=state.dog.phase||0;
+  if(rest){
+    const asset=pangpangRestAsset(rest,phase);
+    pangpangPlayOneShot(asset.tap, asset.idle||asset.fallback, rest.type==='nap'?'胖胖困得点了一下头。':'胖胖迷迷糊糊看了你一眼。');
+    return;
+  }
+  const asset=PANGPANG_STAGE_ASSETS[phase]||PANGPANG_STAGE_ASSETS[0];
+  if(st.unlocked>phase && phase<4){
+    pangpangBusy=true;
+    const newPhase=phase+1;
+    pangpangPlayOneShot(asset.advance, asset.tap||asset.fallback, '', ()=>{
+      state.dog.phase=newPhase;
+      state.dog.fed=(state.dog.fed||0)+1;
+      persist();
+      const newAsset=PANGPANG_STAGE_ASSETS[newPhase]||PANGPANG_STAGE_ASSETS[0];
+      pangpangSetIdle(newAsset.idle, newAsset.fallback||'pangpang_pet_loop.mp4');
+      pangpangUpdateBadge(newPhase);
+      toast('胖胖进入下一个状态啦。继续学,她陪着你。');
+      pangpangBusy=false;
+    });
+    return;
+  }
+  pangpangPlayOneShot(asset.tap, asset.idle||asset.fallback, '');
+  if(phase>=4){ toast('胖胖今天已经满状态陪你啦,明天再继续。'); return; }
+  const needDone=Math.max(1, phase+1-st.done);
+  toast(`胖胖有反应啦。再完成 ${needDone} 条任务,就能进入下个状态。`);
+}
+function pangpangRestAsset(rest,phase){
+  return {
+    idle: rest.idle,
+    tap: rest.tap,
+    fallback: rest.fallback
+  };
+}
+function pangpangSetIdle(src, fallback='pangpang_pet_loop.mp4'){
+  const v=document.getElementById('pangpangIdle');
+  if(!v) return;
+  v.onerror=()=>{
+    v.onerror=null;
+    if(fallback && fallback!==src){ v.src=fallback; v.play().catch(()=>{}); }
+  };
+  if(v.getAttribute('data-src')!==src){
+    v.setAttribute('data-src', src);
+    v.src=src||fallback;
+  }
+  v.loop=true;
+  v.play().catch(()=>{});
+}
+function pangpangPreloadAll(){
+  const all=[];
+  PANGPANG_STAGE_ASSETS.forEach(a=>{ all.push(a.idle,a.tap,a.advance); });
+  all.push('pangpang_sleep_night_idle.mp4','pangpang_sleep_night_tap.mp4','pangpang_sleep_noon_idle.mp4','pangpang_sleep_noon_tap.mp4','pangpang_doze_sitting_idle.mp4','pangpang_doze_sitting_tap.mp4','pangpang_pet_loop.mp4');
+  all.forEach(src=>{
+    if(!src) return;
+    const tmp=document.createElement('video');
+    tmp.src=src; tmp.preload='auto'; tmp.muted=true; tmp.playsInline=true; tmp.load();
+  });
+}
+function pangpangPlayOneShot(src, fallback='pangpang_pet_loop.mp4', msg='', onDone){
+  const v=document.getElementById('pangpangOneShot');
+  if(!v){ if(msg) toast(msg); if(onDone) onDone(); return; }
+  v.onended=null;
+  v.onerror=null;
+  v.loop=false;
+  v.src=src||fallback;
+  v.play().then(()=>{
+    v.classList.add('show');
+  }).catch(()=>{
+    if(fallback && fallback!==src){
+      v.src=fallback;
+      v.play().then(()=>v.classList.add('show')).catch(()=>{});
+    }
+  });
+  if(msg) toast(msg);
+  let called=false;
+  const finish=()=>{
+    if(called) return; called=true;
+    v.classList.remove('show');
+    setTimeout(()=>{
+      v.removeAttribute('src');
+      v.load();
+      if(onDone) onDone();
+    }, 200);
+  };
+  v.onended=finish;
+  setTimeout(finish, 5500);
+}
+function pangpangUpdateBadge(phase){
+  const badge=document.querySelector('.pangpang-badge');
+  const spark=document.querySelector('.pangpang-spark');
+  const rest=pangpangRestState();
+  if(badge){
+    const label=rest?rest.label:(PANGPANG_STAGE_ASSETS[phase]||PANGPANG_STAGE_ASSETS[0]).label;
+    badge.textContent='胖胖 · '+label;
+  }
+  if(spark){
+    spark.textContent=rest?'Zz':(phase>=4?'✨':phase>=2?'♡':'');
+  }
+}
+function pangpangRestoreIdle(){
+  const phase=Math.max(0,Math.min(4,state.dog.phase||0));
+  const rest=pangpangRestState();
+  if(rest){
+    const asset=pangpangRestAsset(rest,phase);
+    pangpangSetIdle(asset.idle, asset.fallback||'pangpang_pet_loop.mp4');
+    return;
+  }
+  const asset=PANGPANG_STAGE_ASSETS[phase]||PANGPANG_STAGE_ASSETS[0];
+  pangpangSetIdle(asset.idle, asset.fallback||'pangpang_pet_loop.mp4');
+}
+function dogSvg(){
+  resetDogIfNeeded();
+  const phase=Math.max(0,Math.min(4,state.dog.phase||0));
+  const asset=PANGPANG_STAGE_ASSETS[phase]||PANGPANG_STAGE_ASSETS[0];
+  const rest=pangpangRestState();
+  const restAsset=rest?pangpangRestAsset(rest,phase):null;
+  const src=restAsset ? restAsset.idle : asset.idle;
+  const fb=(restAsset&&restAsset.fallback)||asset.fallback||'pangpang_pet_loop.mp4';
+  const badge=rest ? rest.label : asset.label;
+  const fallback='pangpang_pet_loop.mp4';
+  const spark=rest ? 'Zz' : (phase>=4?'✨':phase>=2?'♡':'');
+  return `<div class=\"dog\" onclick=\"pangpangTap()\" style=\"cursor:pointer\" title=\"点点胖胖\">
+    <div class=\"pangpang-card phase-${phase}\">
+      <video id=\"pangpangIdle\" class=\"pp-idle\" src=\"${src}\" autoplay muted loop playsinline preload=\"auto\" onerror=\"this.onerror=null;this.src='${fb||fallback}'\"></video>
+      <video id=\"pangpangOneShot\" class=\"pp-oneshot\" src=\"\" muted playsinline preload=\"auto\" onerror=\"this.onerror=null;this.src='${fb||fallback}'\"></video>
+      <div class=\"pangpang-badge\">胖胖 · ${badge}</div>
+      <div class=\"pangpang-spark\">${spark}</div>
+    </div>
+    <div style=\"font-size:12px;color:var(--ink-soft);margin-top:6px\">${rest?'睡觉时间也可以完成任务解锁,胖胖醒来继续陪你':'只通过完成学习任务解锁胖胖下一段小动作'}</div>
+  </div>`;
+}
+
+
+/* ---------- 弹窗（支持层叠：词弹窗可压栈，关闭后回到原文章） ---------- */
+let _modalStack=[];
+function openModal(html){ _modalStack=[]; const box=$('#modalBox'); box.innerHTML=html; box.scrollTop=0; $('#modalMask').classList.add('show'); }
+function openWordPop(html){
+  const box=$('#modalBox');
+  // 把当前（文章）内容 + 滚动位置一起压栈，关闭词弹窗后回到单词所在处而不是文章开头
+  _modalStack.push({html: box.innerHTML, top: box.scrollTop});
+  box.innerHTML=html;
+  box.scrollTop=0;
+  $('#modalMask').classList.add('show');
+}
+function closeModal(){
+  const box=$('#modalBox');
+  if(_modalStack.length){ const it=_modalStack.pop(); box.innerHTML=it.html; box.scrollTop=it.top||0; if(!_modalStack.length) $('#modalMask').classList.remove('show'); return; }
+  $('#modalMask').classList.remove('show');
+}
+$('#modalMask').onclick=e=>{ if(e.target===$('#modalMask'))closeModal(); };
+
+/* ---------- PWA：添加到主屏幕 + Service Worker ---------- */
+function setupPWA(){
+  const png=APP_ICON_PNG;
+  const icons=[{src:png,sizes:'512x512',type:'image/png'},{src:png,sizes:'192x192',type:'image/png'}];
+  const manifest={name:'🫐 考研工作台',short_name:'考研工作台',start_url:'.',display:'standalone',
+    background_color:'#FFF3D6',theme_color:'#ffd54f',icons};
+  const blob=new Blob([JSON.stringify(manifest)],{type:'application/json'});
+  const link=document.createElement('link'); link.rel='manifest'; link.href=URL.createObjectURL(blob); document.head.appendChild(link);
+  const touch=document.createElement('link'); touch.rel='apple-touch-icon'; touch.href=png; document.head.appendChild(touch);
+  /* 单文件版：不注册独立 sw.js，保持一个文件；自动更新由版本检测脚本负责 */
+}
+
 /* ==================== 背诵计划生成器 ==================== */
 function renderPlanner(main){
   const p = state.planner || {};
@@ -5787,8 +6358,25 @@ document.addEventListener('input', function(e){
   }
 });
 
-
-
+/* ========== 页面初始化 ========== */
+function boot(){
+  try{ buildNav(); }catch(e){ console.error('buildNav',e); }
+  try{ setupPWA(); }catch(e){ console.error('setupPWA',e); }
+  try{ studyEnsureToday(); }catch(e){}
+  try{ studyArchiveIfNewDay(); }catch(e){}
+  try{ pangpangPreloadAll(); }catch(e){}
+  try{ $('#side').innerHTML=renderSide(); }catch(e){ console.error('renderSide ERR:', e.message, e.stack); }
+  try{ showModule('home'); }catch(e){ console.error('showModule ERR:', e.message, e.stack); }
+  // 如已开启云同步，自动启动
+  try{ if(state.sync&&state.sync.on){ startSyncTimer(); syncNow(true); } }catch(e){}
+}
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded', boot);
+} else {
+  boot();
+}
+// 计时器：每 30s 落盘一次，每分钟检测跨天归档
+setInterval(function(){ try{ studyFlush(); }catch(e){} }, 30000);
 </script>
 
 </body>
