@@ -5777,9 +5777,33 @@ function plannerMerge(localP, remoteP, baseP){
   }
   take(lp,'l'); take(rp,'r');
   var plans=order.map(function(id){ var o=map[id]; delete o._side; return o; });
-  // 删除墓碑：某计划被删除时记录 id，合并时过滤
+  // 删除墓碑：按"删除时间"判定——只有计划最后修改时间早于删除时间才过滤。
+  // 这样"删除后又重建/改名"的计划（_t 更新）不会被旧墓碑压死。
   var delIds=new Set([].concat(localP.plansDeleted||[], remoteP.plansDeleted||[]));
-  if(delIds.size){ plans=plans.filter(function(pl){ return !delIds.has(pl.id); }); out.plansDeleted=Array.from(delIds); }
+  var delAt=Object.assign({}, remoteP.plansDeletedAt||{}, localP.plansDeletedAt||{});
+  var outDelAt={};
+  if(delIds.size){
+    plans=plans.filter(function(pl){
+      if(!delIds.has(pl.id)) return true;
+      var hasAt=Object.prototype.hasOwnProperty.call(delAt, pl.id);
+      if(!hasAt){ outDelAt[pl.id]=0; return false; }   // 老墓碑无时间戳 → 一律视为已删除
+      var dt=delAt[pl.id]||0;
+      var pt=pl._t||0;
+      if(pt>dt){ return true; }            // 删除之后又改过/重建过 → 保留
+      outDelAt[pl.id]=dt;                  // 仍然删除 → 墓碑续期
+      return false;
+    });
+    // 清理已经失效（对应计划已复活）的墓碑
+    var aliveIds=new Set(plans.map(function(pl){ return pl.id; }));
+    var keepDel=[], keepAt={};
+    Array.from(delIds).forEach(function(id){
+      if(aliveIds.has(id)) return;         // 已复活 → 墓碑作废
+      keepDel.push(id);
+      if(outDelAt[id]) keepAt[id]=outDelAt[id];
+    });
+    if(keepDel.length){ out.plansDeleted=keepDel; out.plansDeletedAt=keepAt; }
+    else { delete out.plansDeleted; delete out.plansDeletedAt; }
+  }
   out.plans=plans;
   if(localP._editId) out._editId=localP._editId;
   return out;
@@ -6881,9 +6905,12 @@ function plDeletePlan(i){
   var pl = arr[i];
   if(!pl) return;
   if(!confirm('确定删除计划「'+pl.name+'」？该计划的打卡记录也会一并删除。')) return;
-  // 记录删除墓碑，保证多设备同步时不复活
+  // 记录删除墓碑，保证多设备同步时不复活；同时记录删除时间，
+  // 以便"删除之后又被重建/改名"的计划（更新时间更晚）能正常复活
   if(!Array.isArray(state.planner.plansDeleted)) state.planner.plansDeleted=[];
   if(state.planner.plansDeleted.indexOf(pl.id)<0) state.planner.plansDeleted.push(pl.id);
+  if(!state.planner.plansDeletedAt || typeof state.planner.plansDeletedAt!=='object') state.planner.plansDeletedAt={};
+  state.planner.plansDeletedAt[pl.id]=Date.now();
   arr.splice(i,1);
   if(state.planner._editId===pl.id) state.planner._editId='';
   persist();
