@@ -6537,15 +6537,15 @@ function plRefreshAll(){
     if(main && current==='planner'){
       var res=document.getElementById('plResult');
       var wasOpen = !!(res && res.style.display!=='none');
-      // 快照：每张卡展开状态、已完成展开状态、滚动位置
+      // 快照：每张卡展开状态、已完成三角展开状态、滚动位置
       var snap={};
       document.querySelectorAll('#plResult .pl-plan-card').forEach(function(c){
         var pid=c.getAttribute('data-pid');
         var b=c.querySelector('.pl-plan-body');
-        var t=c.querySelector('.pl-done-toggle');
+        var h=c.querySelector('.pl-plan-body h4');
         snap[pid]={
           open: !!(b && b.style.display!=='none'),
-          shown: !!(t && t.getAttribute('data-shown')==='1')
+          shown: !!(h && h.getAttribute('data-open')==='1')
         };
       });
       var sy=window.scrollY || (document.documentElement&&document.documentElement.scrollTop) || 0;
@@ -6564,8 +6564,8 @@ function plRefreshAll(){
           if(b) b.style.display = st.open ? '' : 'none';
           if(a) a.textContent = st.open ? '▾ 收起' : '▸ 点开';
           if(st.open && st.shown){
-            var t=c.querySelector('.pl-done-toggle');
-            if(t) plToggleDoneRows(t, pid);
+            var h=c.querySelector('.pl-plan-body h4');
+            if(h) plToggleDoneRows(h, pid);
           }
         });
         // 恢复滚动位置
@@ -6625,7 +6625,7 @@ function plBuildTableHTML(cfg, planId){
     var allItems = (s.newItems||[]).concat(s.reviews||[]);
     if(!allItems.length) return '';
 
-    // 整天完成度：这天所有条目都勾了 => 整行折叠
+    // 整天完成度：这天所有条目都勾了 => 这天收进「已完成」折叠区
     var dayDone = allItems.filter(function(it){ return !!done[plItemKey(dateStr,it)]; }).length;
     var dayFull = (dayDone === allItems.length && allItems.length>0);
     if(dayFull) fullDays++; else partDays++;
@@ -6634,22 +6634,21 @@ function plBuildTableHTML(cfg, planId){
     var revHTML = s.reviews.map(function(item){ return itemRow(dateStr, item, 'review-item'); }).join('');
     var cellContent = newHTML + revHTML;
 
-    var dayKey = pid+'|'+dateStr;
-    var rowCls = (isToday?' today-row':'') + (dayFull?' day-full day-foldable day-line':'');
-    var colSpan = 2;
-    // 整天已完成时：隐藏原内容 + 加一行"已完成"摘要（点一下展开这一天）
-    var restHTML = dayFull
-      ? '<tr class="day-done-summary"><td colspan="'+colSpan+'" onclick="plToggleDay(this,\''+dayKey+'\')" style="cursor:pointer;text-align:center;color:var(--ink-soft);font-size:12px;background:#f6f3ec">'+
-          '✅ 这天已全部完成（'+allItems.length+'项）· ▸ 点开查看'+
-        '</td></tr>'
-      : '';
-    return '<tr class="'+rowCls+'" data-daykey="'+dayKey+'">' +
+    var rowCls = (isToday?' today-row':'') + (dayFull?' day-foldable':'');
+    return '<tr class="'+rowCls+'">' +
       '<td class="date-col">'+dateStr+'<br><span class="day-label">\u5468'+dayLabel+'</span></td>' +
-      '<td>'+cellContent+'</td></tr>' + restHTML;
+      '<td>'+cellContent+'</td></tr>';
   }).filter(function(r){return r}).join('');
 
-  var statLine = '';
-  if(fullDays) statLine = '<div style="margin-bottom:6px;font-size:12px;color:var(--ink-soft)">✅ 已全部完成 <b>'+fullDays+'</b> 天，已省略其内容（点「显示已完成」可展开）</div>';
+  // 「已完成」区块：小三角控制，默认收起（跟旧的「已保存的计划」一个样式）
+  var doneCollapse = fullDays
+    ? '<div style="margin:8px 0 4px">'+
+        '<h4 style="font-size:12px;margin:0;cursor:pointer;color:var(--ink-soft)" onclick="plToggleDoneRows(this,\''+pid+'\')">'+
+          '✅ 已完成 <span class="muted" style="font-weight:400">('+fullDays+' 天)</span> '+
+          '<span class="pl-done-arrow" style="font-size:12px">▸ 点击展开</span>'+
+        '</h4>'+
+      '</div>'
+    : '';
 
   return '<div class="pl-plan-block" data-pid="'+pid+'">' +
     (plan && (state.planner.plans||[]).length>1 ? '<div style="font-size:14px;font-weight:700;color:var(--c-plan);margin-bottom:8px">📖 '+(plan.name||'计划')+'</div>' : '') +
@@ -6659,60 +6658,31 @@ function plBuildTableHTML(cfg, planId){
     '<div class="stat-card"><b>'+days.length+'</b><span>\u603b\u5929\u6570</span></div>' +
     '<div class="stat-card"><b>'+doneCount+'/'+totalTasks+'</b><span>\u5b8c\u6210\u8fdb\u5ea6</span></div>' +
     '</div>' +
-    statLine +
-    (doneCount||fullDays ? '<div style="margin-bottom:6px"><button class="btn ghost sm pl-done-toggle" style="font-size:11px;padding:2px 8px" onclick="plToggleDoneRows(this,\''+pid+'\')">▸ 显示已完成</button></div>' : '') +
     '<table class="plan-table" id="plTable_'+(pid||'_')+'" data-pid="'+pid+'"><thead><tr><th style="width:80px">\u65e5\u671f</th><th>\u5b66\u4e60 / \u590d\u4e60\u5185\u5bb9</th></tr></thead><tbody>'+rows+'</tbody></table>' +
+    doneCollapse +
     '</div>';
 }
-// 整行折叠/展开（某一天全部完成时）
-function plToggleDay(cell, dayKey){
-  var arr = String(dayKey).split('|');
-  var pid = arr[0], dateStr = arr.slice(1).join('|');
-  var tr = cell ? cell.previousElementSibling : null;
-  if(!tr) return;
-  var collapsed = tr.getAttribute('data-collapsed')==='1';
-  var show = collapsed;
-  tr.style.display = show ? '' : 'none';
-  tr.setAttribute('data-collapsed', show?'0':'1');
-  cell.innerHTML = show
-    ? '✅ 这天已全部完成 · ▾ 点击收起'
-    : '✅ 这天已全部完成 · ▸ 点开查看';
-}
-// 已完成行显隐切换（按计划表作用域）：同时展开整天折叠
-function plToggleDoneRows(btn, planId){
+// 「已完成」区块折叠展开（小三角）
+function plToggleDoneRows(head, planId){
   var table = planId ? document.getElementById('plTable_'+planId) : null;
   if(!table) table = document.querySelector('#plResult .plan-table');
   if(!table) return;
-  // data-shown='1' 表示当前已完成行是"显示出来的"；点一下切到相反状态
-  var shown = btn ? (btn.getAttribute('data-shown')==='1') : false;
-  var show = !shown;
-  var lines = table.querySelectorAll('.done-line');
-  lines.forEach(function(el){ el.style.display = show ? '' : 'none'; });
-  // 整天折叠的摘要行 / 展开状态同步
-  var inTable = table.querySelectorAll('tr.day-foldable');
-  inTable.forEach(function(tr){
-    tr.setAttribute('data-collapsed', show?'0':'1');
-    tr.style.display = show ? '' : '';
-  });
-  var sums = table.querySelectorAll('tr.day-done-summary td');
-  sums.forEach(function(td){ td.innerHTML = show ? '✅ 这天已全部完成 · ▾ 点击收起' : '✅ 这天已全部完成（点「显示已完成」可展开）'; });
-  if(btn){
-    btn.setAttribute('data-shown', show?'1':'0');
-    btn.textContent = show ? '▾ 隐藏已完成' : '▸ 显示已完成';
+  var open = head ? head.getAttribute('data-open')==='1' : false;
+  var show = !open;
+  table.querySelectorAll('tr.day-foldable').forEach(function(tr){ tr.style.display = show ? '' : 'none'; });
+  if(head){
+    head.setAttribute('data-open', show?'1':'0');
+    var arrow = head.querySelector('.pl-done-arrow');
+    if(arrow) arrow.textContent = show ? '▾ 点击收起' : '▸ 点击展开';
   }
 }
-// 初次渲染后自动折叠已完成内容（整天折叠 + 单条折叠）
+// 初次渲染后自动折叠已完成内容（默认收起，等用户点小三角）
 function plAutoCollapseDone(){
   try{
     document.querySelectorAll('#plResult .plan-table').forEach(function(table){
-      // 单条已完成行隐藏
-      table.querySelectorAll('.done-line').forEach(function(el){ el.style.display='none'; });
-      // 整天折叠：整行隐藏
-      table.querySelectorAll('tr.day-foldable').forEach(function(tr){
-        tr.style.display='none'; tr.setAttribute('data-collapsed','1');
-      });
+      table.querySelectorAll('tr.day-foldable').forEach(function(tr){ tr.style.display='none'; });
     });
-    document.querySelectorAll('#plResult .pl-done-toggle').forEach(function(b){ b.setAttribute('data-shown','0'); });
+    document.querySelectorAll('#plResult .pl-plan-body h4').forEach(function(h){ h.setAttribute('data-open','0'); });
   }catch(_){}
 }
 
