@@ -6180,13 +6180,57 @@ function renderPlanner(main){
     </div>
 
     <div style="margin-top:14px">
-      <button class="btn ghost sm" id="plResultBtn" onclick="plToggleResult()">▸ 查看计划表</button>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <h3 style="font-size:14px;margin:0">📋 计划表</h3>
+        <button class="btn ghost sm" id="plResultBtn" onclick="plToggleResult()">▸ 全部展开</button>
+      </div>
     </div>
     <div class="planner-result" id="plResult" style="display:none">
-      ${plans.length ? plans.map(function(pl){ return plBuildTableHTML(pl, pl.id); }).join('') : '<div class="muted" style="text-align:center;padding:40px 0">选择模式，设置参数，点击「保存当前计划」</div>'}
+      ${plans.length ? plans.map(function(pl,i){
+        var open = (pl.id === p._editId) || plans.length===1;
+        return `
+        <div class="pl-plan-card" data-pid="${pl.id}" style="margin-bottom:16px">
+          <div class="pl-plan-head" onclick="plTogglePlanCard(this)" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:10px 12px;background:#efe9dd;border-radius:12px 12px 0 0">
+            <div>
+              <div style="font-size:14px;font-weight:700;color:var(--c-plan)">📖 ${pl.name||('计划'+(i+1))}</div>
+              <div class="muted" style="font-size:11px;margin-top:2px">${plMetaText(pl)}</div>
+            </div>
+            <span class="pl-card-arrow" style="font-size:12px;color:var(--ink-soft)">▸ 点开</span>
+          </div>
+          <div class="pl-plan-body" style="display:none;border:1px solid var(--line);border-top:none;border-radius:0 0 12px 12px;padding:10px">
+            ${plBuildTableHTML(pl, pl.id)}
+          </div>
+        </div>`;
+      }).join('') : '<div class="muted" style="text-align:center;padding:40px 0">选择模式，设置参数，点击「保存当前计划」</div>'}
     </div>
   </div>`;
 }
+/* 展开/收起某个计划的计划表卡片 */
+function plTogglePlanCard(head, forceOpen){
+  var card = head && head.closest ? head.closest('.pl-plan-card') : null;
+  if(!card) return;
+  var body = card.querySelector('.pl-plan-body');
+  var arrow = card.querySelector('.pl-card-arrow');
+  if(!body) return;
+  var open = (typeof forceOpen==='boolean') ? forceOpen : (body.style.display==='none');
+  body.style.display = open ? '' : 'none';
+  if(arrow) arrow.textContent = open ? '▾ 收起' : '▸ 点开';
+  if(open) plAutoCollapseDone();
+}
+/* 查看某个计划：展开该计划的卡片并滚动过去 */
+function plShowPlanTable(planId){
+  var res=$('#plResult'), btn=$('#plResultBtn');
+  if(res) res.style.display='';
+  if(btn) btn.textContent='▾ 全部收起';
+  setTimeout(function(){
+    var card = document.querySelector('.pl-plan-card[data-pid="'+planId+'"]');
+    if(!card) return;
+    plTogglePlanCard(card.querySelector('.pl-plan-head'), true);
+    card.scrollIntoView({behavior:'smooth', block:'start'});
+  }, 40);
+}
+/* 旧入口兼容 */
+function plToggleSavedList(){ plShowResult(); }
 
 /* 计算某计划的总篇数 */
 function plPlanItemCount(pl){
@@ -6215,31 +6259,37 @@ function plCarryPendingCount(pl){
   return n;
 }
 
-/* 折叠控制：计划表 & 已保存计划 */
+/* 折叠控制：计划表区域 */
 function plToggleResult(){
   var box=$('#plResult'), btn=$('#plResultBtn');
   if(!box) return;
   var open = box.style.display==='none';
   box.style.display = open ? '' : 'none';
-  if(btn) btn.textContent = open ? '▾ 收起计划表' : '▸ 查看计划表';
-  if(open) setTimeout(plAutoCollapseDone, 0);
+  if(btn) btn.textContent = open ? '▾ 全部收起' : '▸ 全部展开';
+  if(open){
+    // 展开所有计划卡片
+    document.querySelectorAll('#plResult .pl-plan-card').forEach(function(card){
+      var body=card.querySelector('.pl-plan-body'), arrow=card.querySelector('.pl-card-arrow');
+      if(body) body.style.display='';
+      if(arrow) arrow.textContent='▾ 收起';
+    });
+    setTimeout(plAutoCollapseDone, 0);
+  }
 }
-/* 查看某个计划的计划表：展开结果区并滚动定位 */
-function plShowPlanTable(planId){
-  var box=$('#plResult'), btn=$('#plResultBtn');
-  if(box){ box.style.display=''; }
-  if(btn){ btn.textContent='▾ 收起计划表'; }
-  setTimeout(function(){
-    var el = document.getElementById('plTable_'+planId);
-    if(el && el.scrollIntoView) el.scrollIntoView({behavior:'smooth', block:'start'});
-  }, 30);
-}
-/* 旧入口兼容 */
-function plToggleSavedList(){ plShowResult(); }
 function plShowResult(){
   var box=$('#plResult'), btn=$('#plResultBtn');
   if(box){ box.style.display=''; }
-  if(btn){ btn.textContent='▾ 收起计划表'; }
+  if(btn){ btn.textContent='▾ 全部收起'; }
+  // 默认只展开当前编辑中的计划（或唯一计划），其余收起
+  var p=state.planner||{};
+  var cards=document.querySelectorAll('#plResult .pl-plan-card');
+  var only = cards.length===1;
+  cards.forEach(function(card){
+    var body=card.querySelector('.pl-plan-body'), arrow=card.querySelector('.pl-card-arrow');
+    var open = only || card.getAttribute('data-pid')===p._editId;
+    if(body) body.style.display = open ? '' : 'none';
+    if(arrow) arrow.textContent = open ? '▾ 收起' : '▸ 点开';
+  });
   setTimeout(plAutoCollapseDone, 0);
 }
 
@@ -6486,7 +6536,7 @@ function plRefreshAll(){
       if(wasOpen){
         var box=$('#plResult'), btn=$('#plResultBtn');
         if(box) box.style.display='';
-        if(btn) btn.textContent='▾ 收起计划表';
+        if(btn) btn.textContent='▾ 全部收起';
         setTimeout(plAutoCollapseDone, 0);
       }
     }
@@ -6509,14 +6559,13 @@ function plBuildTableHTML(cfg, planId){
   var pid = plan ? plan.id : '';
 
   var totalTasks = 0, doneCount = 0;
-  var tid = 0;
+  var fullDays = 0, partDays = 0;
 
   function itemRow(dateStr, item, baseCls){
     var key = plItemKey(dateStr, item);
     var isDone = !!done[key];
     totalTasks++;
     if(isDone) doneCount++;
-    tid++;
     var esc = String(item).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     // 已完成的行：默认隐藏（加 done-line 类，由开关控制显隐）
     return '<div class="'+(isDone?'done-item done-line':'')+' '+(isDone?'':baseCls)+'">' +
@@ -6530,32 +6579,63 @@ function plBuildTableHTML(cfg, planId){
     var isToday = dateStr === today;
     var dayLabel = ['\u65e5','\u4e00','\u4e8c','\u4e09','\u56db','\u4e94','\u516d'][s.date.getDay()];
 
+    var allItems = (s.newItems||[]).concat(s.reviews||[]);
+    if(!allItems.length) return '';
+
+    // 整天完成度：这天所有条目都勾了 => 整行折叠
+    var dayDone = allItems.filter(function(it){ return !!done[plItemKey(dateStr,it)]; }).length;
+    var dayFull = (dayDone === allItems.length && allItems.length>0);
+    if(dayFull) fullDays++; else partDays++;
+
     var newHTML = s.newItems.map(function(item){ return itemRow(dateStr, item, 'new-item'); }).join('');
     var revHTML = s.reviews.map(function(item){ return itemRow(dateStr, item, 'review-item'); }).join('');
+    var cellContent = newHTML + revHTML;
 
-    var cellContent = (newHTML||'') + (revHTML||'');
-    if(!cellContent) return '';
-
-    return '<tr class="'+(isToday?'today-row':'')+'">' +
+    var dayKey = pid+'|'+dateStr;
+    var rowCls = (isToday?' today-row':'') + (dayFull?' day-full day-foldable day-line':'');
+    var colSpan = 2;
+    // 整天已完成时：隐藏原内容 + 加一行"已完成"摘要（点一下展开这一天）
+    var restHTML = dayFull
+      ? '<tr class="day-done-summary"><td colspan="'+colSpan+'" onclick="plToggleDay(this,\''+dayKey+'\')" style="cursor:pointer;text-align:center;color:var(--ink-soft);font-size:12px;background:#f6f3ec">'+
+          '✅ 这天已全部完成（'+allItems.length+'项）· ▸ 点开查看'+
+        '</td></tr>'
+      : '';
+    return '<tr class="'+rowCls+'" data-daykey="'+dayKey+'">' +
       '<td class="date-col">'+dateStr+'<br><span class="day-label">\u5468'+dayLabel+'</span></td>' +
-      '<td>'+cellContent+'</td></tr>';
+      '<td>'+cellContent+'</td></tr>' + restHTML;
   }).filter(function(r){return r}).join('');
 
-  var donePill = doneCount
-    ? ' <button class="btn ghost sm pl-done-toggle" style="font-size:11px;padding:2px 8px" onclick="plToggleDoneRows(this,'+(pid?("'"+pid+"'"):'null')+')">▸ 显示已完成 ('+doneCount+')</button>'
-    : '';
+  var statLine = '';
+  if(fullDays) statLine = '<div style="margin-bottom:6px;font-size:12px;color:var(--ink-soft)">✅ 已全部完成 <b>'+fullDays+'</b> 天，已省略其内容（点「显示已完成」可展开）</div>';
 
-  return '<div class="plan-stat">' +
+  return '<div class="pl-plan-block" data-pid="'+pid+'">' +
+    (plan && (state.planner.plans||[]).length>1 ? '<div style="font-size:14px;font-weight:700;color:var(--c-plan);margin-bottom:8px">📖 '+(plan.name||'计划')+'</div>' : '') +
+    '<div class="plan-stat">' +
     '<div class="stat-card"><b>'+total+'</b><span>\u603b\u7bc7\u6570</span></div>' +
     '<div class="stat-card"><b>'+newDays+'</b><span>\u65b0\u5b66\u5929\u6570</span></div>' +
     '<div class="stat-card"><b>'+days.length+'</b><span>\u603b\u5929\u6570</span></div>' +
     '<div class="stat-card"><b>'+doneCount+'/'+totalTasks+'</b><span>\u5b8c\u6210\u8fdb\u5ea6</span></div>' +
     '</div>' +
-    (plan && (state.planner.plans||[]).length>1 ? '<div style="font-size:13px;font-weight:600;color:var(--c-plan);margin-bottom:6px">📖 '+(plan.name||'计划')+'</div>' : '') +
-    '<div style="margin-bottom:6px">' + donePill + '</div>' +
-    '<table class="plan-table" id="plTable_'+(pid||'_')+'" data-pid="'+pid+'"><thead><tr><th style="width:80px">\u65e5\u671f</th><th>\u5b66\u4e60 / \u590d\u4e60\u5185\u5bb9</th></tr></thead><tbody>'+rows+'</tbody></table>';
+    statLine +
+    (doneCount||fullDays ? '<div style="margin-bottom:6px"><button class="btn ghost sm pl-done-toggle" style="font-size:11px;padding:2px 8px" onclick="plToggleDoneRows(this,\''+pid+'\')">▸ 显示已完成</button></div>' : '') +
+    '<table class="plan-table" id="plTable_'+(pid||'_')+'" data-pid="'+pid+'"><thead><tr><th style="width:80px">\u65e5\u671f</th><th>\u5b66\u4e60 / \u590d\u4e60\u5185\u5bb9</th></tr></thead><tbody>'+rows+'</tbody></table>' +
+    '</div>';
 }
-// 已完成行显隐切换（按计划表作用域）
+// 整行折叠/展开（某一天全部完成时）
+function plToggleDay(cell, dayKey){
+  var arr = String(dayKey).split('|');
+  var pid = arr[0], dateStr = arr.slice(1).join('|');
+  var tr = cell ? cell.previousElementSibling : null;
+  if(!tr) return;
+  var collapsed = tr.getAttribute('data-collapsed')==='1';
+  var show = collapsed;
+  tr.style.display = show ? '' : 'none';
+  tr.setAttribute('data-collapsed', show?'0':'1');
+  cell.innerHTML = show
+    ? '✅ 这天已全部完成 · ▾ 点击收起'
+    : '✅ 这天已全部完成 · ▸ 点开查看';
+}
+// 已完成行显隐切换（按计划表作用域）：同时展开整天折叠
 function plToggleDoneRows(btn, planId){
   var table = planId ? document.getElementById('plTable_'+planId) : null;
   if(!table) table = document.querySelector('#plResult .plan-table');
@@ -6565,17 +6645,29 @@ function plToggleDoneRows(btn, planId){
   var show = !shown;
   var lines = table.querySelectorAll('.done-line');
   lines.forEach(function(el){ el.style.display = show ? '' : 'none'; });
+  // 整天折叠的摘要行 / 展开状态同步
+  var inTable = table.querySelectorAll('tr.day-foldable');
+  inTable.forEach(function(tr){
+    tr.setAttribute('data-collapsed', show?'0':'1');
+    tr.style.display = show ? '' : '';
+  });
+  var sums = table.querySelectorAll('tr.day-done-summary td');
+  sums.forEach(function(td){ td.innerHTML = show ? '✅ 这天已全部完成 · ▾ 点击收起' : '✅ 这天已全部完成（点「显示已完成」可展开）'; });
   if(btn){
     btn.setAttribute('data-shown', show?'1':'0');
-    var n = lines.length;
-    btn.textContent = show ? ('▾ 隐藏已完成 ('+n+')') : ('▸ 显示已完成 ('+n+')');
+    btn.textContent = show ? '▾ 隐藏已完成' : '▸ 显示已完成';
   }
 }
-// 初次渲染后自动折叠已完成行（对每张计划表生效）
+// 初次渲染后自动折叠已完成内容（整天折叠 + 单条折叠）
 function plAutoCollapseDone(){
   try{
     document.querySelectorAll('#plResult .plan-table').forEach(function(table){
+      // 单条已完成行隐藏
       table.querySelectorAll('.done-line').forEach(function(el){ el.style.display='none'; });
+      // 整天折叠：整行隐藏
+      table.querySelectorAll('tr.day-foldable').forEach(function(tr){
+        tr.style.display='none'; tr.setAttribute('data-collapsed','1');
+      });
     });
     document.querySelectorAll('#plResult .pl-done-toggle').forEach(function(b){ b.setAttribute('data-shown','0'); });
   }catch(_){}
