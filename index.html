@@ -777,7 +777,7 @@ function plMigratePlans(){
   if(!Array.isArray(p.plans)) p.plans = [];
   // 已迁移过则不重复
   if(p.plans.length) return;
-  var PICK = ['name','naming','listName','startYear','perYear','years','startDate','perDay','reverse','intervals'];
+  var PICK = ['name','naming','listName','startYear','perYear','years','total','startDate','perDay','reverse','intervals'];
   var seen = {};
   function toPlan(src, isCurrent){
     if(!src || !src.startDate) return null;
@@ -6244,7 +6244,10 @@ function plMetaText(pl){
   if(pl.naming==='year'){
     return '年份+Text · '+(pl.startYear||'')+'~'+((pl.startYear||0)+(pl.years||1)-1)+' · '+((pl.perYear||0)*(pl.years||1))+'篇 · 每天'+(pl.perDay||1)+'篇';
   }
-  return '传统 · '+(pl.total||'—')+'篇 · 每天'+(pl.perDay||1)+'篇'+(pl.startDate?(' · 起'+pl.startDate):'');
+  if(!pl.total){
+    return '传统 · ⚠️ 未设篇数（点编辑补全） · 每天'+(pl.perDay||1)+'篇'+(pl.startDate?(' · 起'+pl.startDate):'');
+  }
+  return '传统 · '+(pl.listName?(pl.listName+'表 · '):'')+(pl.total)+'篇 · 每天'+(pl.perDay||1)+'篇'+(pl.startDate?(' · 起'+pl.startDate):'');
 }
 /* 已打卡条数 */
 function plDoneCount(pl){
@@ -6551,12 +6554,22 @@ function plDateStr(date){
 }
 
 function plBuildTableHTML(cfg, planId){
-  var built = plBuildSchedule(cfg);
-  var days = built.days, schedule = built.schedule, total = built.total, newDays = built.newDays;
+  var built = null;
+  try{ built = plBuildSchedule(cfg); }catch(e){ built = null; }
   var today = todayStr();
   var plan = planId ? plPlanById(planId) : ((state.planner.plans||[])[0] || null);
-  var done = (plan && plan.done) ? plan.done : (state.planner.done || {});
   var pid = plan ? plan.id : '';
+  // 参数不全（如老数据没有总篇数）→ 生成不了内容，给出明确提示而不是空表
+  if(!built || !built.total || !(built.days||[]).length){
+    var head0 = (plan && (state.planner.plans||[]).length>1) ? '<div style="font-size:14px;font-weight:700;color:var(--c-plan);margin-bottom:8px">📖 '+(plan.name||'计划')+'</div>' : '';
+    return '<div class="pl-plan-block" data-pid="'+(pid||'')+'">' + head0 +
+      '<div class="muted" style="text-align:center;padding:22px 12px;border:1px dashed var(--line);border-radius:12px">'+
+      '⚠️ 这个计划还没有可生成的内容<br><span style="font-size:12px">缺少「总篇数」等参数（多半是旧版本保存的计划）</span><br>'+
+      (pid ? '<button class="btn ghost sm" style="margin-top:10px" onclick="plEditPlan(\''+pid+'\')">✏️ 去补全参数，补完保存即可生成</button>' : '')+
+      '</div></div>';
+  }
+  var days = built.days, schedule = built.schedule, total = built.total, newDays = built.newDays;
+  var done = (plan && plan.done) ? plan.done : (state.planner.done || {});
 
   var totalTasks = 0, doneCount = 0;
   var fullDays = 0, partDays = 0;
@@ -6784,7 +6797,7 @@ function plSavePlan(){
   if(!cfg.startDate){ toast('请先设置开始日期'); return; }
   var p = state.planner;
   if(!Array.isArray(p.plans)) p.plans = [];
-  var PICK = ['name','naming','listName','startYear','perYear','years','startDate','perDay','reverse','intervals'];
+  var PICK = ['name','naming','listName','startYear','perYear','years','total','startDate','perDay','reverse','intervals'];
   // 当前编辑中的计划 id（编辑已有 or 新建）
   var editId = p._editId || '';
   var target = editId ? plPlanById(editId) : null;
@@ -6816,7 +6829,7 @@ function plEditPlan(id){
   var pl = plPlanById(id);
   if(!pl) return;
   var p = state.planner;
-  ['name','naming','listName','startYear','perYear','years','startDate','perDay','reverse','intervals'].forEach(function(k){
+  ['name','naming','listName','startYear','perYear','years','total','startDate','perDay','reverse','intervals'].forEach(function(k){
     if(pl[k]!==undefined) p[k] = pl[k];
   });
   p._editId = id;
