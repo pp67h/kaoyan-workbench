@@ -5539,18 +5539,36 @@ async function ghBackup(silent){
   if(!g.token||!g.owner||!g.repo){ if(!silent) toast('请先填 GitHub Token / 用户名 / 仓库名'); return; }
   if(!silent) toast('🐙 正在备份到 GitHub…');
   try{
-    const payload=Object.assign({}, state);
+    // ① 先拉云端已有数据（拿到 sha + 内容），实现"上传时先合并、两边都不丢"
+    const existing=await ghGetFile();
+    let remoteState=null;
+    if(existing&&existing.content){
+      try{ remoteState=JSON.parse(b64utf8(existing.content.replace(/\s/g,''))); }catch(_){ remoteState=null; }
+    }
+    // ② 有云端数据则智能合并（含删除墓碑，删除可跨设备传播），没有则直接用本机
+    let merged;
+    if(remoteState&&typeof remoteState==='object'){
+      const keepSync=state.sync, keepGh=ghCfg();
+      merged=mergeForCloud(state, remoteState);   // 复用已有合并逻辑：进度取大、数组去重、墓碑剔除
+      merged.sync=keepSync; merged.gh=keepGh;
+      // ③ 合并结果回写本机，让本机也立刻变全（上传即补充）
+      state=merged; state._mtime=Date.now(); persist();
+      try{ $('#side').innerHTML=renderSide(); }catch(_){}
+      try{ const main=document.querySelector('#main'); if(main&&current) showModule(current); }catch(_){}
+    } else {
+      merged=state;
+    }
+    const payload=Object.assign({}, merged);
     delete payload.sync; delete payload.gh; delete payload.checkins; // 照片不进入 GitHub，避免 base64 序列化造成闪退
     payload._artNotes=collectArtNotes(); // 外刊笔记一并纳入同步
     const json=JSON.stringify(payload);
     const b64=utf8b64(json);
-    const existing=await ghGetFile();
     const body={message:'考研工作台备份 '+new Date().toLocaleString('zh-CN'), content:b64};
     if(existing&&existing.sha) body.sha=existing.sha;
     const r=await fetch(ghUrl(),{method:'PUT',headers:ghHeaders(),body:JSON.stringify(body)});
     if(!r.ok){ let t=''; try{ t=await r.text(); }catch(_){} throw new Error('GitHub '+r.status+' '+t.slice(0,160)); }
     g.lastAt=Date.now(); g.msg=''; state._mtime=Date.now(); try{ save('state',state); }catch(_){}
-    if(!silent) toast('✅ 已备份到 GitHub（文字/进度数据已上传，照片仅保存在本机）');
+    if(!silent) toast('✅ 已备份到 GitHub（已与云端智能合并，本机与云端数据互补）');
   }catch(e){ g.msg='上次失败：'+e.message; if(!silent) toast('备份失败：'+e.message); }
 }
 async function ghRestore(){
@@ -5605,11 +5623,12 @@ function deepMerge(base, over){
   return (over===undefined)?base:over;
 }
 function mergeForRestore(local, remote){
-  // 全量同步：以服务器数据为准，DEFAULT_STATE 补全缺失结构
-  // 恢复后，本机与服务器（即另一台设备）数据完全一致
-  const out=deepMerge(DEFAULT_STATE, remote||{});
-  out.sync=local.sync; // 同步码/开关始终用本机的，避免被覆盖导致同步中断
-  return out;
+  // 恢复时的智能合并：本机已有的保留、本机没有的补进来（不覆盖、不重复）
+  // 删除墓碑生效：被删掉的东西不会因恢复而"复活"
+  local=local||{}; remote=remote||{};
+  const merged=mergeForCloud(local, remote); // 进度取大、数组按内容去重、墓碑剔除
+  merged.sync=local.sync; // 同步码/开关始终用本机的，避免被覆盖导致同步中断
+  return merged;
 }
 function mergeArrayByKey(a,b,keyFn){
   const out=[]; const seen=new Set();
@@ -5644,8 +5663,30 @@ function mergeForCloud(local, remote){
   out.checkins=mergePhotoMap(local.checkins, remote.checkins);
   out.mood=mergeArrayByKey(remote.mood, local.mood);
   out.mySent=mergeArrayByKey(remote.mySent, local.mySent, x=>(x.s||x.text||JSON.stringify(x)));
+  // 其余数组类字段：按内容去重合并（避免 deepMerge 整体覆盖导致丢数据）
+  out.weekPlan=arrayMergeByKey(local.weekPlan||[],remote.weekPlan||[],x=>(x.week||'')+'|'+(x.t||'').trim().toLowerCase());
+  out.keyDates=arrayMergeByKey(local.keyDates||[],remote.keyDates||[],x=>(x.n||'')+'|'+(x.d||''));
+  out.sched=arrayMergeByKey(local.sched||[],remote.sched||[],x=>(x.d||'')+'|'+(x.t||''));
+  // 进度类：取两边最大值（进度只增不减）
+  out.eng=deepMergeMax(local.eng||{},remote.eng||{});
+  out.pol=deepMergeMax(local.pol||{},remote.pol||{});
+  out.vocab=deepMergeMax(local.vocab||{},remote.vocab||{});
+  out.know=deepMergeMax(local.know||{},remote.know||{});
+  out.studyLog=studyLogMerge(local.studyLog||{},remote.studyLog||{});
+  out.studyToday=deepMergeMax(local.studyToday||{},remote.studyToday||{});
+  out.studyTime=deepMergeMax(local.studyTime||{},remote.studyTime||{});
+  out.calStat=deepMergeMax(local.calStat||{},remote.calStat||{});
+  out.words=deepMergeMax(local.words||{},remote.words||{});
+  out.dog=deepMergeMax(local.dog||{},remote.dog||{});
+  if((local.words||{}).list&&(remote.words||{}).list){
+    out.words.list=arrayMergeByKey(local.words.list,remote.words.list,x=>(x.en||'').toLowerCase());
+  }
+  // 日记/里程碑：按日期合并（两边都保留）
+  out.diary=Object.assign({},local.diary||{},remote.diary||{});
+  out.calMile=Object.assign({},local.calMile||{},remote.calMile||{});
   out.sync=local.sync;
   out.gh=local.gh;
+  out._mtime=Date.now();
   return out;
 }
 function resetDogIfNeeded(){
