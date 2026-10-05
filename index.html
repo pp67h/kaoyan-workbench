@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.10.5.6-->
+<!--APP_VER:2026.10.5.7-->
 <style>
 :root{
   --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
@@ -40,6 +40,7 @@
   --c-plan:#E08A3C;   /* 背诵计划 · 柿子橙（秋色主色） */
   --c-plan2:#E09A3C;  /* 背诵计划 · 金橙（次色：标题/数字） */
   --c-plan3:#D98A2B;  /* 背诵计划 · 姜黄（辅色：标签/勾选） */
+  --c-exam:#79C3E6;   /* 真题得分 · 天空蓝 */
   --r:18px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -483,6 +484,11 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 .ck-photo .del{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;border:none;font-size:14px;display:none}
 .ck-photo:hover .del{display:block}
 .ck-photo .cap{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(transparent,rgba(0,0,0,.55));color:#fff;font-size:10px;padding:6px 8px 5px}
+/* 真题得分页专属样式 */
+.exam-hero{background:linear-gradient(135deg,var(--c-exam),color-mix(in srgb,var(--c-exam) 68%,#fff));color:#fff;border-radius:18px;padding:16px 18px;box-shadow:0 6px 20px rgba(61,126,166,.25);margin-bottom:12px}
+.exchip{display:inline-flex;align-items:center;justify-content:center;padding:6px 12px;border-radius:12px;border:1px solid var(--line);background:var(--paper2);font-size:13px;cursor:pointer;user-select:none;white-space:nowrap}
+.exchip.on{background:linear-gradient(135deg,var(--c-exam),color-mix(in srgb,var(--c-exam) 68%,#fff));color:#fff;border-color:transparent;font-weight:600}
+.bar.exbar>i{background:linear-gradient(135deg,var(--c-exam),color-mix(in srgb,var(--c-exam) 68%,#fff))}
 /* 倒计时(home)与目标院校(school)保持原纯色，不参与渐变 */
 body[data-mod="home"] .btn,body[data-mod="school"] .btn{background:var(--accent,#e85d4a)}
 body[data-mod="home"] .pill,body[data-mod="school"] .pill{background:var(--accent,#e85d4a)}
@@ -1513,6 +1519,8 @@ function progApplyVocab(){ const v=state.vocab; v.total=Math.max(1,parseInt($('#
 /* 进度概览：英语四卡（一刷/二刷） */
 function progEngSet(card,key,val){ const o=state.eng[card]; if(!o)return; o[key]=Math.max(0,Math.min(o.total,parseInt(val)||0)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
 function progEngTot(card,val){ const o=state.eng[card]; if(!o)return; o.total=Math.max(1,parseInt(val)||0); o.y1=Math.min(o.y1,o.total); o.y2=Math.min(o.y2,o.total); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
+function progVocabSet(k,val){ const w=state.vocab; if(!w)return; w[k]=Math.max(0,Math.min(w.total,parseInt(val)||0)); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
+function progVocabTot(val){ const w=state.vocab; if(!w)return; w.total=Math.max(1,parseInt(val)||1); ['y1','y2','y3'].forEach(function(k){ w[k]=Math.min(w[k],w.total); }); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
 /* 进度概览：政治 1000题/肖八/肖四 */
 function progPolSet(k,val){ const max=(k==='q1000'||k==='q1000y2')?(state.pol.q1000Total||30):k==='x8'?8:4; state.pol[k]=Math.max(0,Math.min(max,parseInt(val)||0)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
 function progPolStep(k,n){ const max=(k==='q1000'||k==='q1000y2')?(state.pol.q1000Total||30):k==='x8'?8:4; state.pol[k]=Math.max(0,Math.min(max,state.pol[k]+n)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
@@ -1525,6 +1533,24 @@ function renderProgress(main){
   const engCards=['完形','阅读','新题型','作文'];
   const KS=['发展心理学','心理学导论','心理与教育研究方法'];
   const r=state.know.round;
+  const vw=state.vocab||(state.vocab={total:6023,y1:4289,y2:0,y3:0});
+  if(vw.cur!==undefined){ vw.y1=vw.cur; vw.total=vw.total||6023; delete vw.cur; persist(); }
+  const vocabRows=(function(){
+    const vv=state.vocab;
+    const bars=[['一刷','y1'],['二刷','y2'],['三刷','y3']].map(function(it){
+      const pct=progPct(vv[it[1]],vv.total);
+      return '<div class="prog-row"><div class="spread"><b>'+it[0]+'</b><span class="muted">'+vv[it[1]]+'/'+vv.total+'（'+pct+'%）</span></div><div class="bar"><i style="width:'+pct+'%"></i></div></div>';
+    }).join('');
+    return '<div class="prog-row">'
+      +'<div class="spread"><b>🔤 单词</b><span class="muted">共 '+vv.total+' 词</span></div>'
+      +bars
+      +'<div class="row" style="margin-top:6px;gap:6px;align-items:center;flex-wrap:wrap">'
+      +'<span class="muted" style="font-size:12px">一刷</span><input type="number" min="0" value="'+vv.y1+'" onchange="progVocabSet(\'y1\',this.value)" style="width:56px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">'
+      +'<span class="muted" style="font-size:12px">二刷</span><input type="number" min="0" value="'+vv.y2+'" onchange="progVocabSet(\'y2\',this.value)" style="width:56px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">'
+      +'<span class="muted" style="font-size:12px">三刷</span><input type="number" min="0" value="'+vv.y3+'" onchange="progVocabSet(\'y3\',this.value)" style="width:56px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">'
+      +'<span class="muted">/ 总</span><input type="number" min="1" value="'+vv.total+'" onchange="progVocabTot(this.value)" style="width:56px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">'
+      +'</div></div>';
+  })();
   const stat=(label,cur,tot)=>`<div class="prog-row">
     <div class="spread"><b>${label}</b><span class="muted">${Math.max(0,Math.min(cur,tot))}/${tot}（${progPct(cur,tot)}%）</span></div>
     <div class="bar"><i style="width:${progPct(cur,tot)}%"></i></div></div>`;
@@ -1557,6 +1583,9 @@ function renderProgress(main){
   let html=`
   <div class="panel">
     <div class="spread"><h2 style="margin:0">📊 进度概览</h2><span class="pill">可编辑 · 云同步</span></div>
+
+    <div class="prog-sec">🔤 单词（一刷 / 二刷 / 三刷）</div>
+    ${vocabRows}
 
     <div class="prog-sec">🇬🇧 英语（一刷 / 二刷）</div>
     ${engRows}
@@ -3003,53 +3032,10 @@ function szDel(i){ state.pol.shizheng.splice(i,1); const n=state.pol.shizheng.le
 
 /* ---------- 英语专区 ---------- */
 function renderEng(main){
-  const e=state.eng; const ph=phaseOf(todayStr());
-  const types=Object.keys(e);
-  let w=state.vocab||(state.vocab={total:6023,y1:4289,y2:0,y3:0});
-  if(w.cur!==undefined){ w.y1=w.cur; w.total=w.total||6023; delete w.cur; persist(); }
-  const p1=Math.round(w.y1/w.total*100), p2=Math.round(w.y2/w.total*100), p3=Math.round(w.y3/w.total*100);
+  const ph=phaseOf(todayStr());
   let html=`<div class="panel"><div class="spread"><h2>🔤 英语专区</h2><span class="pill">${ph}</span></div>
-    <div style="margin:8px 0 4px">
-      <div class="subj-card">
-        <div class="nm"><span>📚 单词 <span class="muted" style="font-weight:400;font-size:12px">共 ${w.total} 词</span></span>
-          <span class="nm-tools">
-          <span class="stepper"><button onclick="vocabStep('y1',-1)">−</button><b>一刷 ${w.y1}</b><button onclick="vocabStep('y1',1)">+</button></span>
-          <span class="stepper"><button onclick="vocabStep('y2',-1)">−</button><b>二刷 ${w.y2}</b><button onclick="vocabStep('y2',1)">+</button></span>
-          <span class="stepper"><button onclick="vocabStep('y3',-1)">−</button><b>三刷 ${w.y3}</b><button onclick="vocabStep('y3',1)">+</button></span></span></div>
-        <div class="bar" style="--accent:var(--c-eng);margin-top:4px"><i style="width:${p1}%"></i></div>
-        <div class="muted" style="font-size:11px;margin:2px 0">一刷 ${p1}%</div>
-        <div class="bar2"><i style="width:${p2}%"></i></div>
-        <div class="muted" style="font-size:11px;margin-top:2px">二刷 ${p2}%</div>
-        <div class="bar2"><i style="width:${p3}%"></i></div>
-        <div class="muted" style="font-size:11px;margin-top:2px">三刷 ${p3}%</div>
-        <div class="row" style="margin-top:8px;align-items:center">
-          <span class="muted" style="font-size:12px">当前编辑：</span>
-          <div class="row" style="gap:4px">
-            <button class="btn ${(!state._vocabEdit||state._vocabEdit==='y1')?'':'ghost'} sm" onclick="vocabEditSel('y1')">一刷</button>
-            <button class="btn ${state._vocabEdit==='y2'?'':'ghost'} sm" onclick="vocabEditSel('y2')">二刷</button>
-            <button class="btn ${state._vocabEdit==='y3'?'':'ghost'} sm" onclick="vocabEditSel('y3')">三刷</button>
-          </div>
-          <input type="number" id="vocabCur" value="${w[state._vocabEdit||'y1']}" style="max-width:90px">
-          <span class="muted">/ ${w.total}</span>
-          <button class="btn sm" onclick="vocabSave()">保存</button>
-        </div>
-      </div>
-    </div>
-    <hr>`;
-  types.forEach(tp=>{
-    const o=e[tp]; const p1=Math.round(o.y1/o.total*100), p2=Math.round(o.y2/o.total*100);
-    html+=`<div class="subj-card">
-      <div class="nm"><span>${tp} <span class="muted" style="font-weight:400;font-size:12px">共 ${o.total} 篇</span></span>
-        <span class="nm-tools">
-        <span class="stepper"><button onclick="engStep('${tp}',1,-1)">−</button><b>一刷 ${o.y1}</b><button onclick="engStep('${tp}',1,1)">+</button></span>
-        <span class="stepper"><button onclick="engStep('${tp}',2,-1)">−</button><b>二刷 ${o.y2}</b><button onclick="engStep('${tp}',2,1)">+</button></span></span></div>
-      <div class="bar" style="--accent:var(--c-eng);margin-top:6px"><i style="width:${p1}%"></i></div>
-      <div class="muted" style="font-size:11px;margin:2px 0">一刷 ${p1}%</div>
-      <div class="bar2"><i style="width:${p2}%"></i></div>
-      <div class="muted" style="font-size:11px;margin-top:2px">二刷 ${p2}%</div>
-    </div>`;
-  });
-  html+=`</div>`;
+    <div class="muted" style="font-size:12px;margin-top:4px">单词三刷与题型篇数进度已移至「📊 进度概览」，本页专注真题得分</div></div>`;
+  html+=renderExamBlock();
   main.innerHTML=html;
 }
 function engStep(tp,round,n){ const o=state.eng[tp]; const k=round===1?'y1':'y2'; o[k]=Math.max(0,Math.min(o.total,o[k]+n)); persist(); renderEng($('#main')); $('#side').innerHTML=renderSide(); }
@@ -5486,6 +5472,177 @@ function apkCopyLink(url){
     toast('✓ 链接已复制，粘贴到浏览器即可下载');
   }catch(e){ toast(url); }
 }
+/* ---------- 真题得分 ---------- */
+const EXAM_PARTS={
+  1:[{k:'wanxing',n:'完形',f:10},{k:'text1',n:'Text1',f:10},{k:'text2',n:'Text2',f:10},{k:'text3',n:'Text3',f:10},{k:'text4',n:'Text4',f:10},{k:'xinxing',n:'新题型',f:10},{k:'fanyi',n:'翻译',f:10},{k:'xiao',n:'小作文',f:10},{k:'da',n:'大作文',f:20}],
+  2:[{k:'wanxing',n:'完形',f:10},{k:'text1',n:'Text1',f:10},{k:'text2',n:'Text2',f:10},{k:'text3',n:'Text3',f:10},{k:'text4',n:'Text4',f:10},{k:'xinxing',n:'新题型',f:10},{k:'fanyi',n:'翻译',f:15},{k:'xiao',n:'小作文',f:10},{k:'da',n:'大作文',f:15}]
+};
+function examState(){
+  if(!state.exam||typeof state.exam!=='object') state.exam={paper:1,records:[],deleted:[]};
+  if(!Array.isArray(state.exam.records)) state.exam.records=[];
+  if(!Array.isArray(state.exam.deleted)) state.exam.deleted=[];
+  if(!state.exam.paper) state.exam.paper=1;
+  return state.exam;
+}
+function exParts(){ return EXAM_PARTS[examState().paper]||EXAM_PARTS[1]; }
+function exPartOf(k){ return exParts().find(p=>p.k===k)||exParts()[0]; }
+function exStats(){
+  const parts=exParts(), fmap={}; parts.forEach(p=>fmap[p.k]=p);
+  const byPart={},byYear={};
+  examState().records.forEach(r=>{
+    if(!fmap[r.p])return;
+    (byPart[r.p]=byPart[r.p]||[]).push(r);
+    (byYear[r.y]=byYear[r.y]||[]).push(r);
+  });
+  return {fmap,byPart,byYear};
+}
+let _exPart='text1';
+function exPick(k){
+  _exPart=k;
+  document.querySelectorAll('#exPartChips .exchip').forEach(el=>el.classList.toggle('on',el.dataset.k===k));
+  const p=exPartOf(k), inp=document.getElementById('exScore');
+  if(inp){ inp.max=p.f; if((+inp.value||0)>p.f) inp.value=p.f; }
+  const hint=document.getElementById('exFullHint'); if(hint) hint.textContent='满分 '+p.f+' 分';
+}
+function exStep(d){
+  const inp=document.getElementById('exScore'); if(!inp)return;
+  let v=Math.round((((+inp.value)||0)+d)*2)/2;
+  const p=exPartOf(_exPart);
+  inp.value=Math.max(0,Math.min(p.f,v));
+}
+function exSave(){
+  const e=examState();
+  const yEl=document.getElementById('exYear'), sEl=document.getElementById('exScore'), dEl=document.getElementById('exDate'), nEl=document.getElementById('exNote');
+  const y=parseInt(yEl&&yEl.value,10);
+  if(!y||y<1990||y>2030){ toast('年份要在 1990-2030 之间'); return; }
+  let s=parseFloat(sEl&&sEl.value);
+  if(isNaN(s)){ toast('请先填分数'); return; }
+  const p=exPartOf(_exPart);
+  s=Math.max(0,Math.min(p.f,Math.round(s*2)/2));
+  e.records.push({id:uid(),y:y,p:_exPart,s:s,d:(dEl&&dEl.value)||todayStr(),n:(nEl&&nEl.value||'').trim()});
+  save('state',state);
+  toast('📈 已记录 '+y+' '+p.n+' '+s+' 分');
+  renderEng($('#main')); $('#side').innerHTML=renderSide();
+}
+function exDel(id){
+  const e=examState();
+  e.records=e.records.filter(r=>r.id!==id);
+  if(!e.deleted.includes(id)) e.deleted.push(id);
+  save('state',state);
+  toast('已删除');
+  renderEng($('#main')); $('#side').innerHTML=renderSide();
+}
+function exPaper(n){
+  const e=examState();
+  if(e.paper===n) return;
+  e.paper=n; e._pt=Date.now(); save('state',state);
+  _exPart='text1';
+  toast(n===1?'已切换到英语一（翻译10/大作文20）':'已切换到英语二（翻译15/大作文15）');
+  renderEng($('#main')); $('#side').innerHTML=renderSide();
+}
+/* 云同步合并：记录按 id 并集，删除走墓碑，卷种取更新时间新的 */
+function examMerge(a,b){
+  a=a||{}; b=b||{};
+  const del=Array.from(new Set([...(a.deleted||[]),...(b.deleted||[])]));
+  const kp=x=>x&&!del.includes(x.id);
+  return {
+    paper:(b._pt||0)>(a._pt||0)?(b.paper||1):(a.paper||1),
+    _pt:Math.max(a._pt||0,b._pt||0),
+    records:arrayMergeByKey((a.records||[]).filter(kp),(b.records||[]).filter(kp),x=>x.id),
+    deleted:del
+  };
+}
+function renderExamBlock(){
+  const e=examState(), st=exStats(), parts=exParts();
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  // 按年份折算百分制总分
+  const yearRows=Object.keys(st.byYear).map(Number).sort((a,b)=>b-a).map(y=>{
+    const rs=st.byYear[y];
+    let s=0,f=0;
+    rs.forEach(r=>{ const p=st.fmap[r.p]; if(p){ s+=r.s; f+=p.f; } });
+    const pct=f>0?Math.round(s/f*1000)/10:0;
+    const detail=parts.filter(p=>rs.some(r=>r.p===p.k)).map(p=>{
+      const rr=rs.filter(r=>r.p===p.k).sort((a,b)=>(b.d||'').localeCompare(a.d||''))[0];
+      return p.n+' '+rr.s;
+    }).join(' · ');
+    return {y:y,pct:pct,raw:s,full:f,cnt:rs.length,detail:detail};
+  });
+  const overall=yearRows.length?(yearRows.reduce((a,r)=>a+r.pct,0)/yearRows.length):null;
+  const totalCnt=e.records.length;
+  // 各题型统计
+  const partRows=parts.map(p=>{
+    const rs=st.byPart[p.k]||[];
+    const avg=rs.length?rs.reduce((a,r)=>a+r.s,0)/rs.length:null;
+    const mx=rs.length?Math.max.apply(null,rs.map(r=>r.s)):null;
+    return {p:p,avg:avg,mx:mx,cnt:rs.length};
+  });
+  const yearOpts=(function(){ let o=''; for(let y=2026;y>=2005;y--) o+='<option value="'+y+'"'+(y===2015?' selected':'')+'>'+y+'</option>'; return o; })();
+  let html=`
+  <div class="exam-hero">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+      <div style="min-width:0">
+        <div style="font-size:11px;opacity:.85;letter-spacing:.08em">AVERAGE · 各年折算百分制</div>
+        <div style="font-size:38px;font-weight:800;line-height:1.15;margin-top:2px">${overall!=null?overall.toFixed(1):'—'}<span style="font-size:14px;font-weight:600;opacity:.85"> 分</span></div>
+        <div style="font-size:12px;opacity:.9;margin-top:2px">${overall!=null?('已练 '+totalCnt+' 次 · 覆盖 '+yearRows.length+' 个年份'):'还没有记录，从下面添加第一次成绩吧'}</div>
+      </div>
+      <div style="flex-shrink:0;text-align:center">
+        <div style="font-size:22px;line-height:1">📈</div>
+        <div class="exchip ${e.paper===1?'on':''}" style="margin-top:8px;padding:4px 10px;font-size:12px" onclick="exPaper(1)">英语一</div>
+        <div class="exchip ${e.paper===2?'on':''}" style="margin-top:5px;padding:4px 10px;font-size:12px" onclick="exPaper(2)">英语二</div>
+      </div>
+    </div>
+  </div>
+  <div class="panel">
+    <h3 style="margin-top:0">➕ 添加成绩</h3>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <select id="exYear" style="padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--paper);font-size:14px">${yearOpts}</select>
+      <span class="muted" style="font-size:12px">年真题</span>
+      <input type="date" id="exDate" value="${todayStr()}" style="padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--paper);font-size:13px">
+    </div>
+    <div id="exPartChips" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
+      ${parts.map(p=>'<div class="exchip'+(p.k===_exPart?' on':'')+'" data-k="'+p.k+'" onclick="exPick(\''+p.k+'\')">'+p.n+'</div>').join('')}
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:12px">
+      <button type="button" class="btn sm" style="padding:7px 12px" onclick="exStep(-0.5)">−0.5</button>
+      <input type="number" id="exScore" value="6" min="0" step="0.5" style="width:92px;text-align:center;font-size:17px;font-weight:700;padding:7px 4px;border-radius:10px;border:1px solid var(--line);background:var(--paper)">
+      <button type="button" class="btn sm" style="padding:7px 12px" onclick="exStep(0.5)">＋0.5</button>
+      <span class="muted" style="font-size:12px" id="exFullHint">满分 ${exPartOf(_exPart).f} 分</span>
+    </div>
+    <input type="text" id="exNote" placeholder="备注（可选）：比如 唐迟方法第一次实战、错2个主旨题" style="width:100%;margin-top:10px;padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--paper);font-size:13px;box-sizing:border-box">
+    <div style="margin-top:10px">
+      <button class="btn" style="background:linear-gradient(135deg,var(--c-exam),color-mix(in srgb,var(--c-exam) 68%,#fff))" onclick="exSave()">💾 记下这次成绩</button>
+    </div>
+  </div>
+  <div class="panel">
+    <h3 style="margin-top:0">🎯 各题型平均分</h3>
+    ${partRows.map(r=>{
+      const pct=r.avg!=null?Math.round(r.avg/r.p.f*100):0;
+      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px dashed var(--line)">'
+        +'<div style="width:64px;font-size:13px;font-weight:600;flex-shrink:0">'+r.p.n+'</div>'
+        +'<div class="bar exbar" style="flex:1"><i style="width:'+pct+'%"></i></div>'
+        +'<div style="width:132px;text-align:right;font-size:12px;flex-shrink:0">'
+        +(r.avg!=null
+          ? '<b style="font-size:15px;color:var(--c-exam)">'+r.avg.toFixed(1)+'</b><span class="muted">/'+r.p.f+'</span><br><span class="muted" style="font-size:10.5px">最高'+r.mx+' · '+r.cnt+'次</span>'
+          : '<span class="muted" style="font-size:11px">未开始</span>')
+        +'</div></div>';
+    }).join('')}
+  </div>
+  ${yearRows.length?'<div class="panel"><h3 style="margin-top:0">🗓 按年份</h3>'+yearRows.map(r=>
+      '<div style="padding:8px 0;border-bottom:1px dashed var(--line)">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:14px">'+r.y+' 年</b>'
+      +'<span style="font-size:13px;white-space:nowrap"><b style="color:var(--c-exam);font-size:15px">'+r.pct+'</b> 分 <span class="muted" style="font-size:11px">（卷面 '+r.raw+'/'+r.full+'）</span></span></div>'
+      +'<div class="muted" style="font-size:11.5px;margin-top:2px">'+esc(r.detail)+'</div>'
+      +'</div>').join('')+'</div>':''}
+  ${totalCnt?'<div class="panel"><h3 style="margin-top:0">📋 全部记录</h3>'+e.records.slice().sort((a,b)=>(b.d||'').localeCompare(a.d||'')).map(r=>{
+      const p=st.fmap[r.p]||{n:r.p,f:10};
+      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px dashed var(--line)">'
+        +'<span style="font-size:13px;min-width:0"><b>'+r.y+'</b> · '+p.n+' <span class="muted" style="font-size:11px">'+r.d+(r.n?' · '+esc(r.n):'')+'</span></span>'
+        +'<span style="display:flex;align-items:center;gap:8px;flex-shrink:0"><b style="color:var(--c-exam);font-size:15px">'+r.s+'</b><span class="muted" style="font-size:11px">/'+p.f+'</span>'
+        +'<button class="btn ghost sm" style="padding:2px 9px;font-size:11px" onclick="exDel(\''+r.id+'\')">删</button></span></div>';
+    }).join('')+'</div>':''}`;
+  return html;
+}
+
 function renderCloud(main){
   const s=state.sync||{};
   const g=ghCfg();
@@ -5802,6 +5959,8 @@ function mergeForCloud(local, remote){
   out.calMile=Object.assign({},local.calMile||{},remote.calMile||{});
   // 背诵计划：planner.plans 按 id 合并；每个计划的 done/carry 深合并（勾选与顺延都不丢）
   out.planner=plannerMerge(local.planner, remote.planner, out.planner);
+  // 真题得分：记录按 id 并集，删除走墓碑，卷种取更新时间新的
+  out.exam=examMerge(local.exam||{},remote.exam||{});
   out.sync=local.sync;
   out.gh=local.gh;
   out._mtime=Date.now();
