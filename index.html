@@ -731,8 +731,10 @@ const DEFAULT_STATE = {
     perDay:2,       // 每天数量
     reverse:false,  // 是否逆序
     intervals:[0,1,3,7,14,29], // 复习间隔（天）
-    done:{},        // 打卡记录 {itemKey: true}
-    savedPlans:[],  // 保存的多个计划
+    done:{},        // 打卡记录 {itemKey: true}（旧字段，迁移后由 plans[] 各自持有）
+    savedPlans:[],  // 旧：保存的多个计划（迁移后转入 plans）
+    carry:{},       // 旧：顺延记录（迁移后由 plans[] 各自持有）
+    plans:[],       // ★ 多计划并存，全部生效；每项含 done/carry，独立打卡与顺延
   },
 };
 let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
@@ -765,7 +767,38 @@ let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
   // 每日学习时间（计时器）
   if(!state.studyToday||typeof state.studyToday!=='object') state.studyToday={date:'',英语:0,政治:0,专业课:0,生活:0};
   if(!state.studyLog||typeof state.studyLog!=='object') state.studyLog={};
+  plMigratePlans();
 })();
+/* ---------- 背诵计划：单份 → 多份迁移（幂等） ---------- */
+function plNewId(){ return 'pl_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function plMigratePlans(){
+  var p = state.planner;
+  if(!p || typeof p!=='object') return;
+  if(!Array.isArray(p.plans)) p.plans = [];
+  // 已迁移过则不重复
+  if(p.plans.length) return;
+  var PICK = ['name','naming','listName','startYear','perYear','years','startDate','perDay','reverse','intervals'];
+  var seen = {};
+  function toPlan(src, isCurrent){
+    if(!src || !src.startDate) return null;
+    var key = (src.name||'')+'|'+(src.startDate||'');
+    if(seen[key]) return null;
+    seen[key] = 1;
+    var np = { id: plNewId() };
+    PICK.forEach(function(k){ if(src[k]!==undefined) np[k] = src[k]; });
+    // 只有"当前正在用的计划"才继承旧的 done/carry；存档计划自带
+    np.done  = (src.done  && typeof src.done==='object')  ? src.done  : (isCurrent ? (p.done||{})  : {});
+    np.carry = (src.carry && typeof src.carry==='object') ? src.carry : (isCurrent ? (p.carry||{}) : {});
+    return np;
+  }
+  // ① 旧的 savedPlans 全部转入（同时生效）
+  (p.savedPlans||[]).forEach(function(sp){ var np=toPlan(sp,false); if(np) p.plans.push(np); });
+  // ② 当前生效的单份计划也转入
+  var cur = toPlan(p, true);
+  if(cur) p.plans.push(cur);
+  // 迁移完成，清空旧容器（plans 已是唯一数据源）
+  p.savedPlans = [];
+}
 function persist(){ if(state&&typeof state==='object') state._mtime=Date.now(); save('state',state); ghAutoSync(); }
 
 /* ---------- 直接拍照（通过 Android JavascriptInterface）---------- */
@@ -1870,6 +1903,7 @@ function renderTask(main){
     </div>
     <div class="sub">◀▶ 查看任一天${d!==todayStr()?' · <a href="javascript:copyAllToToday()" style="color:var(--c-task);font-weight:600">📋 复制全部到今天</a>':''}</div>
     <div id="taskList"></div>
+    <div id="plTaskRows" style="margin-top:6px"></div>
     <div class="row" style="margin-top:8px">
       <input type="text" id="ntTitle" placeholder="任务内容，如：背发展心理学第5章" style="flex:2">
       <select id="ntSubj" style="flex:1;max-width:110px">
@@ -1886,6 +1920,8 @@ function renderTask(main){
   main.innerHTML=html;
   studyInitCard();
   $('#taskList').innerHTML=tasks.length?tasks.map(t=>taskHTML(t)).join(''):'';
+  var plRows=document.getElementById('plTaskRows');
+  if(plRows) plRows.innerHTML=plTaskPageHTML(d);
 }
 function taskShiftDay(n){
   const cur=taskViewDate.split('-').map(Number);   // [Y,M,D] 按本地
@@ -5048,9 +5084,12 @@ function renderSide(){
         <span style="flex:1;font-size:13px;${t.status==='done'?'text-decoration:line-through;color:var(--ink-soft)':''}">${t.time!=='—'?t.time+' · ':''}${t.title}</span>
         <span class="dotc" style="background:${SUBJ_COLOR[t.subj]||'#999'}"></span>
       </div>`).join('') : '<p class="muted" style="font-size:13px">今日还没任务，去「每日打卡」添加。</p>'}
+      ${plTodayRowsHTML()}
+    </div>
+    <div class="row" style="margin-top:8px">
+      <a class="btn ghost sm" href="javascript:showModule('planner')" style="font-size:11px">📖 背诵计划 ›</a>
     </div>
   </div>
-  ${plTodayHTML()}
   <div class="panel" style="cursor:pointer" onclick="showModule('progress')">
     <div class="spread"><h3 style="margin-top:0;margin-bottom:0">📊 进度概览</h3><a class="btn ghost sm" href="javascript:showModule('progress')" onclick="event.stopPropagation()">去编辑 ›</a></div>
     ${engMini}
@@ -5539,18 +5578,36 @@ async function ghBackup(silent){
   if(!g.token||!g.owner||!g.repo){ if(!silent) toast('请先填 GitHub Token / 用户名 / 仓库名'); return; }
   if(!silent) toast('🐙 正在备份到 GitHub…');
   try{
-    const payload=Object.assign({}, state);
+    // ① 先拉云端已有数据（拿到 sha + 内容），实现"上传时先合并、两边都不丢"
+    const existing=await ghGetFile();
+    let remoteState=null;
+    if(existing&&existing.content){
+      try{ remoteState=JSON.parse(b64utf8(existing.content.replace(/\s/g,''))); }catch(_){ remoteState=null; }
+    }
+    // ② 有云端数据则智能合并（含删除墓碑，删除可跨设备传播），没有则直接用本机
+    let merged;
+    if(remoteState&&typeof remoteState==='object'){
+      const keepSync=state.sync, keepGh=ghCfg();
+      merged=mergeForCloud(state, remoteState);   // 复用已有合并逻辑：进度取大、数组去重、墓碑剔除
+      merged.sync=keepSync; merged.gh=keepGh;
+      // ③ 合并结果回写本机，让本机也立刻变全（上传即补充）
+      state=merged; state._mtime=Date.now(); persist();
+      try{ $('#side').innerHTML=renderSide(); }catch(_){}
+      try{ const main=document.querySelector('#main'); if(main&&current) showModule(current); }catch(_){}
+    } else {
+      merged=state;
+    }
+    const payload=Object.assign({}, merged);
     delete payload.sync; delete payload.gh; delete payload.checkins; // 照片不进入 GitHub，避免 base64 序列化造成闪退
     payload._artNotes=collectArtNotes(); // 外刊笔记一并纳入同步
     const json=JSON.stringify(payload);
     const b64=utf8b64(json);
-    const existing=await ghGetFile();
     const body={message:'考研工作台备份 '+new Date().toLocaleString('zh-CN'), content:b64};
     if(existing&&existing.sha) body.sha=existing.sha;
     const r=await fetch(ghUrl(),{method:'PUT',headers:ghHeaders(),body:JSON.stringify(body)});
     if(!r.ok){ let t=''; try{ t=await r.text(); }catch(_){} throw new Error('GitHub '+r.status+' '+t.slice(0,160)); }
     g.lastAt=Date.now(); g.msg=''; state._mtime=Date.now(); try{ save('state',state); }catch(_){}
-    if(!silent) toast('✅ 已备份到 GitHub（文字/进度数据已上传，照片仅保存在本机）');
+    if(!silent) toast('✅ 已备份到 GitHub（已与云端智能合并，本机与云端数据互补）');
   }catch(e){ g.msg='上次失败：'+e.message; if(!silent) toast('备份失败：'+e.message); }
 }
 async function ghRestore(){
@@ -5605,11 +5662,12 @@ function deepMerge(base, over){
   return (over===undefined)?base:over;
 }
 function mergeForRestore(local, remote){
-  // 全量同步：以服务器数据为准，DEFAULT_STATE 补全缺失结构
-  // 恢复后，本机与服务器（即另一台设备）数据完全一致
-  const out=deepMerge(DEFAULT_STATE, remote||{});
-  out.sync=local.sync; // 同步码/开关始终用本机的，避免被覆盖导致同步中断
-  return out;
+  // 恢复时的智能合并：本机已有的保留、本机没有的补进来（不覆盖、不重复）
+  // 删除墓碑生效：被删掉的东西不会因恢复而"复活"
+  local=local||{}; remote=remote||{};
+  const merged=mergeForCloud(local, remote); // 进度取大、数组按内容去重、墓碑剔除
+  merged.sync=local.sync; // 同步码/开关始终用本机的，避免被覆盖导致同步中断
+  return merged;
 }
 function mergeArrayByKey(a,b,keyFn){
   const out=[]; const seen=new Set();
@@ -5644,8 +5702,65 @@ function mergeForCloud(local, remote){
   out.checkins=mergePhotoMap(local.checkins, remote.checkins);
   out.mood=mergeArrayByKey(remote.mood, local.mood);
   out.mySent=mergeArrayByKey(remote.mySent, local.mySent, x=>(x.s||x.text||JSON.stringify(x)));
+  // 其余数组类字段：按内容去重合并（避免 deepMerge 整体覆盖导致丢数据）
+  out.weekPlan=arrayMergeByKey(local.weekPlan||[],remote.weekPlan||[],x=>(x.week||'')+'|'+(x.t||'').trim().toLowerCase());
+  out.keyDates=arrayMergeByKey(local.keyDates||[],remote.keyDates||[],x=>(x.n||'')+'|'+(x.d||''));
+  out.sched=arrayMergeByKey(local.sched||[],remote.sched||[],x=>(x.d||'')+'|'+(x.t||''));
+  // 进度类：取两边最大值（进度只增不减）
+  out.eng=deepMergeMax(local.eng||{},remote.eng||{});
+  out.pol=deepMergeMax(local.pol||{},remote.pol||{});
+  out.vocab=deepMergeMax(local.vocab||{},remote.vocab||{});
+  out.know=deepMergeMax(local.know||{},remote.know||{});
+  out.studyLog=studyLogMerge(local.studyLog||{},remote.studyLog||{});
+  out.studyToday=deepMergeMax(local.studyToday||{},remote.studyToday||{});
+  out.studyTime=deepMergeMax(local.studyTime||{},remote.studyTime||{});
+  out.calStat=deepMergeMax(local.calStat||{},remote.calStat||{});
+  out.words=deepMergeMax(local.words||{},remote.words||{});
+  out.dog=deepMergeMax(local.dog||{},remote.dog||{});
+  if((local.words||{}).list&&(remote.words||{}).list){
+    out.words.list=arrayMergeByKey(local.words.list,remote.words.list,x=>(x.en||'').toLowerCase());
+  }
+  // 日记/里程碑：按日期合并（两边都保留）
+  out.diary=Object.assign({},local.diary||{},remote.diary||{});
+  out.calMile=Object.assign({},local.calMile||{},remote.calMile||{});
+  // 背诵计划：planner.plans 按 id 合并；每个计划的 done/carry 深合并（勾选与顺延都不丢）
+  out.planner=plannerMerge(local.planner, remote.planner, out.planner);
   out.sync=local.sync;
   out.gh=local.gh;
+  out._mtime=Date.now();
+  return out;
+}
+/* 背诵计划多计划合并：按 id 对齐，done/carry 取并集 */
+function plannerMerge(localP, remoteP, baseP){
+  localP=localP||{}; remoteP=remoteP||{};
+  var out=baseP?Object.assign({},baseP):{};
+  // 顶层配置字段：以较新的 _mtime 一方为准（沿用 deepMerge 结果），这里只补 plans
+  var lp=(localP.plans||[]), rp=(remoteP.plans||[]);
+  var map={}, order=[];
+  function take(arr){
+    arr.forEach(function(pl){
+      if(!pl||!pl.id) return;
+      if(!map[pl.id]){ map[pl.id]=Object.assign({},pl); map[pl.id].done=Object.assign({},pl.done||{}); map[pl.id].carry=Object.assign({},pl.carry||{}); order.push(pl.id); }
+      else{
+        var cur=map[pl.id];
+        // 非记录类字段：后者（按顺序 lp 先 rp 后）覆盖空值
+        Object.keys(pl).forEach(function(k){
+          if(k==='done'||k==='carry') return;
+          if(pl[k]!==undefined && pl[k]!=='' && pl[k]!==null) cur[k]=pl[k];
+        });
+        cur.done=Object.assign(cur.done||{}, pl.done||{});
+        cur.carry=Object.assign(cur.carry||{}, pl.carry||{});
+      }
+    });
+  }
+  take(lp); take(rp);
+  var plans=order.map(function(id){ return map[id]; });
+  // 删除墓碑：某计划被删除时记录 id，合并时过滤
+  var delIds=new Set([].concat(localP.plansDeleted||[], remoteP.plansDeleted||[]));
+  if(delIds.size){ plans=plans.filter(function(pl){ return !delIds.has(pl.id); }); out.plansDeleted=Array.from(delIds); }
+  out.plans=plans;
+  // 当前编辑中的计划 id 尽量保留本地
+  if(localP._editId) out._editId=localP._editId;
   return out;
 }
 function resetDogIfNeeded(){
@@ -5898,6 +6013,9 @@ function renderPlanner(main){
   p.intervals = p.intervals || [0,1,3,7,14,29];
   p.done = p.done || {};
   p.savedPlans = p.savedPlans || [];
+  p.carry = p.carry || {};
+  if(!Array.isArray(p.plans)) p.plans = [];
+  const plans = p.plans;
 
   main.innerHTML = `
   <style>
@@ -6031,27 +6149,96 @@ function renderPlanner(main){
       </div>
     </div>
 
-    ${p.savedPlans.length ? `
-    <div style="margin-top:14px">
-      <h3 style="font-size:14px;margin-bottom:6px">📂 已保存的计划</h3>
-      ${p.savedPlans.map((sp,i)=>`
-        <div class="plan-saved">
-          <div>
-            <div class="name">${sp.name}</div>
-            <div class="meta">${sp.naming==='year'?'年份+Text':'传统'} · ${sp.naming==='year'?(sp.startYear+'~'+(sp.startYear+sp.years-1)+' · '+sp.perYear*sp.years+'篇'):(sp.total+'篇')} · 每天${sp.perDay}篇</div>
+    <div style="margin-top:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <h3 style="font-size:14px;margin:0">
+          📚 我的计划
+          <span class="muted" style="font-size:12px;font-weight:400">（${plans.length} 个 · 全部同时生效）</span>
+        </h3>
+        <button class="btn ghost sm" onclick="plNewPlan()">＋ 新建计划</button>
+      </div>
+      ${plans.length ? plans.map(function(pl,i){
+        var cnt = plPlanItemCount(pl);
+        var on = (p._editId === pl.id);
+        return `
+        <div class="plan-saved" style="${on?'border-color:var(--c-plan);box-shadow:0 0 0 2px color-mix(in srgb,var(--c-plan) 25%,transparent)':''}">
+          <div style="min-width:0">
+            <div class="name">${on?'✏️ ':''}${pl.name||('计划'+(i+1))}</div>
+            <div class="meta">${plMetaText(pl)}${cnt?' · 共'+cnt+'篇':''}</div>
+            <div class="meta" style="margin-top:2px">
+              <span class="chip" style="font-size:11px">已打卡 ${plDoneCount(pl)}</span>
+              ${plCarryPendingCount(pl)?`<span class="chip" style="font-size:11px">待顺延 ${plCarryPendingCount(pl)}</span>`:''}
+            </div>
           </div>
-          <div style="display:flex;gap:6px">
-            <button class="btn ghost sm" onclick="plLoadPlan(${i})">载入</button>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="btn ghost sm" onclick="plEditPlan('${pl.id}')">编辑</button>
+            <button class="btn ghost sm" onclick="plShowPlanTable('${pl.id}')">查看</button>
             <button class="btn ghost sm" onclick="plDeletePlan(${i})">删除</button>
           </div>
-        </div>
-      `).join('')}
-    </div>` : ''}
+        </div>`;
+      }).join('') : '<div class="muted" style="font-size:13px;padding:8px 0">还没有计划，设置参数后点「保存当前计划」即可创建。</div>'}
+    </div>
 
-    <div class="planner-result" id="plResult">
-      ${p.startDate ? plBuildTableHTML(p) : '<div class="muted" style="text-align:center;padding:40px 0">选择模式，设置参数，点击「生成计划表」</div>'}
+    <div style="margin-top:14px">
+      <button class="btn ghost sm" id="plResultBtn" onclick="plToggleResult()">▸ 查看计划表</button>
+    </div>
+    <div class="planner-result" id="plResult" style="display:none">
+      ${plans.length ? plans.map(function(pl){ return plBuildTableHTML(pl, pl.id); }).join('') : '<div class="muted" style="text-align:center;padding:40px 0">选择模式，设置参数，点击「保存当前计划」</div>'}
     </div>
   </div>`;
+}
+
+/* 计算某计划的总篇数 */
+function plPlanItemCount(pl){
+  try{
+    var built = plBuildSchedule(pl);
+    return built && built.total ? built.total : 0;
+  }catch(_){ return 0; }
+}
+/* 计划元信息文案 */
+function plMetaText(pl){
+  if(pl.naming==='year'){
+    return '年份+Text · '+(pl.startYear||'')+'~'+((pl.startYear||0)+(pl.years||1)-1)+' · '+((pl.perYear||0)*(pl.years||1))+'篇 · 每天'+(pl.perDay||1)+'篇';
+  }
+  return '传统 · '+(pl.total||'—')+'篇 · 每天'+(pl.perDay||1)+'篇'+(pl.startDate?(' · 起'+pl.startDate):'');
+}
+/* 已打卡条数 */
+function plDoneCount(pl){
+  if(!pl||!pl.done) return 0;
+  var n=0; for(var k in pl.done){ if(pl.done[k]) n++; }
+  return n;
+}
+/* 待顺延（已顺延但未完成）条数 */
+function plCarryPendingCount(pl){
+  if(!pl||!pl.carry) return 0;
+  var n=0; for(var k in pl.carry){ if(pl.carry[k]) n++; }
+  return n;
+}
+
+/* 折叠控制：计划表 & 已保存计划 */
+function plToggleResult(){
+  var box=$('#plResult'), btn=$('#plResultBtn');
+  if(!box) return;
+  var open = box.style.display==='none';
+  box.style.display = open ? '' : 'none';
+  if(btn) btn.textContent = open ? '▾ 收起计划表' : '▸ 查看计划表';
+}
+/* 查看某个计划的计划表：展开结果区并滚动定位 */
+function plShowPlanTable(planId){
+  var box=$('#plResult'), btn=$('#plResultBtn');
+  if(box){ box.style.display=''; }
+  if(btn){ btn.textContent='▾ 收起计划表'; }
+  setTimeout(function(){
+    var el = document.getElementById('plTable_'+planId);
+    if(el && el.scrollIntoView) el.scrollIntoView({behavior:'smooth', block:'start'});
+  }, 30);
+}
+/* 旧入口兼容 */
+function plToggleSavedList(){ plShowResult(); }
+function plShowResult(){
+  var box=$('#plResult'), btn=$('#plResultBtn');
+  if(box){ box.style.display=''; }
+  if(btn){ btn.textContent='▾ 收起计划表'; }
 }
 
 function plSwitchMode(mode){
@@ -6133,7 +6320,8 @@ function plGenerate(){
   persist();
 
   var result=$('#plResult');
-  if(result) result.innerHTML=plBuildTableHTML(state.planner);
+  if(result){ result.innerHTML=plBuildTableHTML(state.planner); }
+  plShowResult(); // 生成后自动展开计划表
   toast('✅ 计划表已生成');
 }
 
@@ -6196,6 +6384,100 @@ function plItemKey(dateStr, itemName){
   return dateStr + '|' + itemName;
 }
 
+/* ---------- 背诵任务「顺延到明天」（plan 级，可取消） ---------- */
+// 数据：plan.carry = { '2026-10-06': [ {item:'L3', kind:'new'|'review', from:'2026-10-05'} ] }
+function plPlanById(id){
+  var plans = (state.planner && state.planner.plans) || [];
+  for(var i=0;i<plans.length;i++){ if(plans[i].id===id) return plans[i]; }
+  return null;
+}
+function plCarryList(plan){
+  if(!plan) return {};
+  if(!plan.carry || typeof plan.carry!=='object') plan.carry = {};
+  return plan.carry;
+}
+function plNextDateStr(dateStr){
+  var parts = String(dateStr).split('-');
+  var dt = new Date(+parts[0], +parts[1]-1, +parts[2]);
+  dt.setDate(dt.getDate()+1);
+  return plDateStr(dt);
+}
+// 某计划在某天的内容（原计划 + 该计划顺延进来的）
+function plPlanDayItems(plan, dateStr){
+  var out = { newItems:[], reviews:[], carryNew:[], carryReview:[] };
+  if(!plan) return out;
+  var built;
+  try { built = plan.startDate ? plBuildSchedule(plan) : null; } catch(e){ built = null; }
+  if(built){
+    for(var i=0;i<built.days.length;i++){
+      var s = built.schedule[built.days[i]];
+      if(plDateStr(s.date) === dateStr){ out.newItems = s.newItems||[]; out.reviews = s.reviews||[]; break; }
+    }
+  }
+  var carry = plCarryList(plan)[dateStr] || [];
+  carry.forEach(function(c){
+    if(!c || !c.item) return;
+    if(c.kind === 'new') out.carryNew.push(c.item); else out.carryReview.push(c.item);
+  });
+  return out;
+}
+// 向后兼容：旧的单计划接口 → 取第一个 plan
+function plDayItemsFull(dateStr){
+  var plans = (state.planner && state.planner.plans) || [];
+  return plPlanDayItems(plans[0], dateStr);
+}
+// 遍历所有计划，返回某天每计划的内容
+function plAllPlansToday(dateStr){
+  var plans = (state.planner && state.planner.plans) || [];
+  var res = [];
+  plans.forEach(function(pl){
+    if(!pl || !pl.startDate) return;
+    var full = plPlanDayItems(pl, dateStr);
+    var ni = (full.newItems||[]).concat(full.carryNew||[]);
+    var rv = (full.reviews||[]).concat(full.carryReview||[]);
+    if(!ni.length && !rv.length) return;   // 该计划当天无内容则不显示
+    res.push({ plan: pl, newItems: ni, reviews: rv });
+  });
+  return res;
+}
+// 判断某条目在某天是否"是被顺延进来的"（用于显示"已顺延/取消"）
+function plCarriedFrom(plan, dateStr, item){
+  var carry = plCarryList(plan)[dateStr] || [];
+  for(var i=0;i<carry.length;i++){ if(carry[i] && carry[i].item===item) return carry[i]; }
+  return null;
+}
+// 顺延到日历上的"明天"
+function plCarryToNextDay(planId, dateStr, item, kind){
+  var plan = plPlanById(planId);
+  if(!plan) return;
+  var next = plNextDateStr(dateStr);
+  var carry = plCarryList(plan);
+  carry[next] = carry[next] || [];
+  var dup = carry[next].some(function(c){ return c && c.item === item; });
+  if(!dup) carry[next].push({item:item, kind:(kind==='review'?'review':'new'), from:dateStr});
+  persist();
+  plRefreshAll();
+  toast('「'+item+'」已顺延到明天 '+next);
+}
+// 取消顺延（从目标日期的 carry 里移除）
+function plCancelCarry(planId, toDate, item){
+  var plan = plPlanById(planId);
+  if(!plan) return;
+  var carry = plCarryList(plan);
+  var arr = carry[toDate] || [];
+  carry[toDate] = arr.filter(function(c){ return !(c && c.item===item); });
+  if(!carry[toDate].length) delete carry[toDate];
+  persist();
+  plRefreshAll();
+  toast('已取消顺延「'+item+'」');
+}
+// 顺延/取消后统一刷新 P1 + P2 + 计划表
+function plRefreshAll(){
+  try{ var side=document.querySelector('#side'); if(side) side.innerHTML=renderSide(); }catch(_){}
+  try{ var ptr=document.getElementById('plTaskRows'); if(ptr) ptr.innerHTML=plTaskPageHTML(taskViewDate||todayStr()); }catch(_){}
+  try{ var main=document.querySelector('#main'); if(main && current==='planner') renderPlanner(main); }catch(_){}
+}
+
 function plDateStr(date){
   var y=date.getFullYear();
   var m=String(date.getMonth()+1).padStart(2,'0');
@@ -6203,13 +6485,29 @@ function plDateStr(date){
   return y+'-'+m+'-'+d;
 }
 
-function plBuildTableHTML(cfg){
+function plBuildTableHTML(cfg, planId){
   var built = plBuildSchedule(cfg);
   var days = built.days, schedule = built.schedule, total = built.total, newDays = built.newDays;
   var today = todayStr();
-  var done = state.planner.done || {};
+  var plan = planId ? plPlanById(planId) : ((state.planner.plans||[])[0] || null);
+  var done = (plan && plan.done) ? plan.done : (state.planner.done || {});
+  var pid = plan ? plan.id : '';
 
   var totalTasks = 0, doneCount = 0;
+  var tid = 0;
+
+  function itemRow(dateStr, item, baseCls){
+    var key = plItemKey(dateStr, item);
+    var isDone = !!done[key];
+    totalTasks++;
+    if(isDone) doneCount++;
+    tid++;
+    var esc = String(item).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    // 已完成的行：默认隐藏（加 done-line 类，由开关控制显隐）
+    return '<div class="'+(isDone?'done-item done-line':'')+' '+(isDone?'':baseCls)+'">' +
+      '<input type="checkbox" class="plan-checkbox" '+(isDone?'checked':'')+' onchange="plToggle2(\''+pid+'\',\''+dateStr+'\',\''+esc+'\', this.checked)">' +
+      '<span>'+item+'</span></div>';
+  }
 
   var rows = days.map(function(d){
     var s = schedule[d];
@@ -6217,25 +6515,8 @@ function plBuildTableHTML(cfg){
     var isToday = dateStr === today;
     var dayLabel = ['\u65e5','\u4e00','\u4e8c','\u4e09','\u56db','\u4e94','\u516d'][s.date.getDay()];
 
-    var newHTML = s.newItems.map(function(item){
-      var key = plItemKey(dateStr, item);
-      var isDone = done[key];
-      totalTasks++;
-      if(isDone) doneCount++;
-      return '<div class="'+(isDone?'done-item':'new-item')+'">' +
-        '<input type="checkbox" class="plan-checkbox" '+(isDone?'checked':'')+' onchange="plToggle(\''+dateStr+'\',\''+item.replace(/'/g,"\\'")+'\', this.checked)">' +
-        '<span>'+item+'</span></div>';
-    }).join('');
-
-    var revHTML = s.reviews.map(function(item){
-      var key = plItemKey(dateStr, item);
-      var isDone = done[key];
-      totalTasks++;
-      if(isDone) doneCount++;
-      return '<div class="'+(isDone?'done-item':'review-item')+'">' +
-        '<input type="checkbox" class="plan-checkbox" '+(isDone?'checked':'')+' onchange="plToggle(\''+dateStr+'\',\''+item.replace(/'/g,"\\'")+'\', this.checked)">' +
-        '<span>'+item+'</span></div>';
-    }).join('');
+    var newHTML = s.newItems.map(function(item){ return itemRow(dateStr, item, 'new-item'); }).join('');
+    var revHTML = s.reviews.map(function(item){ return itemRow(dateStr, item, 'review-item'); }).join('');
 
     var cellContent = (newHTML||'') + (revHTML||'');
     if(!cellContent) return '';
@@ -6245,121 +6526,223 @@ function plBuildTableHTML(cfg){
       '<td>'+cellContent+'</td></tr>';
   }).filter(function(r){return r}).join('');
 
+  var donePill = doneCount
+    ? ' <button class="btn ghost sm pl-done-toggle" style="font-size:11px;padding:2px 8px" onclick="plToggleDoneRows(this,'+(pid?("'"+pid+"'"):'null')+')">▸ 显示已完成 ('+doneCount+')</button>'
+    : '';
+
   return '<div class="plan-stat">' +
     '<div class="stat-card"><b>'+total+'</b><span>\u603b\u7bc7\u6570</span></div>' +
     '<div class="stat-card"><b>'+newDays+'</b><span>\u65b0\u5b66\u5929\u6570</span></div>' +
     '<div class="stat-card"><b>'+days.length+'</b><span>\u603b\u5929\u6570</span></div>' +
     '<div class="stat-card"><b>'+doneCount+'/'+totalTasks+'</b><span>\u5b8c\u6210\u8fdb\u5ea6</span></div>' +
     '</div>' +
-    '<table class="plan-table"><thead><tr><th style="width:80px">\u65e5\u671f</th><th>\u5b66\u4e60 / \u590d\u4e60\u5185\u5bb9</th></tr></thead><tbody>'+rows+'</tbody></table>';
+    (plan && (state.planner.plans||[]).length>1 ? '<div style="font-size:13px;font-weight:600;color:var(--c-plan);margin-bottom:6px">📖 '+(plan.name||'计划')+'</div>' : '') +
+    '<div style="margin-bottom:6px">' + donePill + '</div>' +
+    '<table class="plan-table" id="plTable_'+(pid||'_')+'" data-pid="'+pid+'"><thead><tr><th style="width:80px">\u65e5\u671f</th><th>\u5b66\u4e60 / \u590d\u4e60\u5185\u5bb9</th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
-
-function plToggle(dateStr, item, checked){
-  var key = plItemKey(dateStr, item);
-  if(!state.planner.done) state.planner.done = {};
-  if(checked){ state.planner.done[key] = true; }
-  else { delete state.planner.done[key]; }
-  persist();
-  var result = $('#plResult');
-  if(result) result.innerHTML = plBuildTableHTML(state.planner);
-  // 同步刷新侧栏今日背诵
-  var side=$('#side'); if(side) side.innerHTML=renderSide();
-}
-
-/* 获取今日背诵任务（新学 + 复习），用于侧栏展示 */
-function plTodayItems(){
-  var p = state.planner || {};
-  if(!p.startDate) return null;
-  var built;
-  try { built = plBuildSchedule(p); } catch(e){ return null; }
-  var today = todayStr();
-  for(var i=0;i<built.days.length;i++){
-    var d = built.days[i];
-    var s = built.schedule[d];
-    if(plDateStr(s.date) === today){
-      return { newItems: s.newItems||[], reviews: s.reviews||[], done: p.done||{} };
-    }
+// 已完成行显隐切换（按计划表作用域）
+function plToggleDoneRows(btn, planId){
+  var table = planId ? document.getElementById('plTable_'+planId) : null;
+  if(!table) table = document.querySelector('#plResult .plan-table');
+  if(!table) return;
+  // data-shown='1' 表示当前已完成行是"显示出来的"；点一下切到相反状态
+  var shown = btn ? (btn.getAttribute('data-shown')==='1') : false;
+  var show = !shown;
+  var lines = table.querySelectorAll('.done-line');
+  lines.forEach(function(el){ el.style.display = show ? '' : 'none'; });
+  if(btn){
+    btn.setAttribute('data-shown', show?'1':'0');
+    var n = lines.length;
+    btn.textContent = show ? ('▾ 隐藏已完成 ('+n+')') : ('▸ 显示已完成 ('+n+')');
   }
-  return { newItems:[], reviews:[], done:{} };
+}
+// 初次渲染后自动折叠已完成行（对每张计划表生效）
+function plAutoCollapseDone(){
+  try{
+    document.querySelectorAll('#plResult .plan-table').forEach(function(table){
+      table.querySelectorAll('.done-line').forEach(function(el){ el.style.display='none'; });
+    });
+    document.querySelectorAll('#plResult .pl-done-toggle').forEach(function(b){ b.setAttribute('data-shown','0'); });
+  }catch(_){}
+}
+
+// plan 级勾选：记录到该 plan 自己的 done
+function plToggle2(planId, dateStr, item, checked){
+  var plan = plPlanById(planId);
+  if(!plan) return;
+  if(!plan.done || typeof plan.done!=='object') plan.done = {};
+  var key = plItemKey(dateStr, item);
+  if(checked){ plan.done[key] = true; }
+  else { delete plan.done[key]; }
+  persist();
+  plRefreshAll();
+}
+// 兼容旧调用：作用于第一个计划
+function plToggle(dateStr, item, checked){
+  var plans = (state.planner && state.planner.plans) || [];
+  if(!plans.length) return;
+  plToggle2(plans[0].id, dateStr, item, checked);
+}
+
+/* 背诵条目行渲染（plan 级，含勾选 / 顺延 / 取消顺延） */
+function plItemRowHTML(plan, dateStr, item, kind){
+  var done = plan.done || {};
+  var key = plItemKey(dateStr, item);
+  var isDone = !!done[key];
+  var esc = String(item).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  var pid = plan.id;
+  var carried = plCarriedFrom(plan, dateStr, item);
+  var tag = kind==='review'
+    ? '<span class="chip" style="font-size:10px;padding:1px 6px;background:#f0ebe0;color:var(--ink-soft)">复习</span>'
+    : '<span class="chip" style="font-size:10px;padding:1px 6px;background:#e8eef5;color:var(--c-plan)">新学</span>';
+  var prefix = kind==='review' ? '↻ ' : '';
+  var action = '';
+  if(isDone){
+    action = '';
+  } else if(carried){
+    // 已顺延 → 可取消
+    action = '<button class="btn ghost sm" style="font-size:10px;padding:1px 6px;margin-left:4px;color:#c0392b" onclick="plCancelCarry(\''+pid+'\',\''+dateStr+'\',\''+esc+'\')" title="取消顺延">已顺延 ⟲取消</button>';
+  } else {
+    action = '<button class="btn ghost sm" style="font-size:10px;padding:1px 6px;margin-left:4px" onclick="plCarryToNextDay(\''+pid+'\',\''+dateStr+'\',\''+esc+'\',\''+kind+'\')" title="顺延到明天">→明天</button>';
+  }
+  return '<div class="row" style="margin:4px 0;align-items:center">'+
+    '<input type="checkbox" class="plan-checkbox" '+(isDone?'checked':'')+' onchange="plToggle2(\''+pid+'\',\''+dateStr+'\',\''+esc+'\',this.checked)">'+
+    '<span style="flex:1;font-size:13px;'+(isDone?'text-decoration:line-through;color:var(--ink-soft)':(kind==='review'?'color:var(--ink-soft)':'font-weight:600;color:var(--c-plan)'))+'">'+prefix+item+'</span>'+
+    tag+action+
+    '</div>';
+}
+/* 某计划在某天的分组 HTML（分组标题 + 新学 + 复习） */
+function plPlanGroupHTML(plan, dateStr, opts){
+  opts = opts || {};
+  var full = plPlanDayItems(plan, dateStr);
+  var newItems = (full.newItems||[]).concat(full.carryNew||[]);
+  var reviews  = (full.reviews||[]).concat(full.carryReview||[]);
+  if(!newItems.length && !reviews.length) return '';
+  var done = plan.done || {};
+  var doneN = 0, totalN = newItems.length + reviews.length;
+  newItems.concat(reviews).forEach(function(it){ if(done[plItemKey(dateStr,it)]) doneN++; });
+  var title = (opts.compact?'📖 ':'📖 ')+(plan.name||'背诵计划');
+  if(dateStr!==todayStr()) title += ' · '+dateStr;
+  var h = '<div style="margin:8px 0 2px;display:flex;align-items:center;gap:6px">'+
+    '<span style="font-size:11px;font-weight:700;color:var(--c-plan)">'+title+'</span>'+
+    '<span class="chip" style="font-size:10px;padding:0 6px">'+doneN+'/'+totalN+'</span></div>';
+  h += newItems.map(function(it){ return plItemRowHTML(plan, dateStr, it, 'new'); }).join('');
+  if(reviews.length){
+    h += reviews.map(function(it){ return plItemRowHTML(plan, dateStr, it, 'review'); }).join('');
+  }
+  return h;
+}
+
+/* 今日背诵——供侧栏（P2）使用：遍历所有计划分组显示 */
+function plTodayRowsHTML(){
+  var today = todayStr();
+  var groups = plAllPlansToday(today);
+  if(!groups.length) return '';
+  var rows = '';
+  groups.forEach(function(g){ rows += plPlanGroupHTML(g.plan, today); });
+  return rows;
+}
+
+/* 今日背诵统计（用于合并进今日任务的进度） */
+function plTodayStat(){
+  var today = todayStr();
+  var groups = plAllPlansToday(today);
+  var doneN = 0, totalN = 0;
+  groups.forEach(function(g){
+    var done = g.plan.done || {};
+    g.newItems.concat(g.reviews).forEach(function(it){
+      totalN++; if(done[plItemKey(today,it)]) doneN++;
+    });
+  });
+  return {done:doneN, total:totalN};
 }
 
 function sidePlToggle(item, checked){
   plToggle(todayStr(), item, checked);
 }
 
-/* 侧栏「今日背诵」面板 HTML */
-function plTodayHTML(){
-  var t = plTodayItems();
-  if(!t) return '';
-  var today = todayStr();
-  var items = (t.newItems||[]).concat(t.reviews||[]);
-  var doneCount = 0;
-  items.forEach(function(it){ if(t.done[plItemKey(today,it)]) doneCount++; });
-  var total = items.length;
-  var pct = total?Math.round(doneCount/total*100):0;
-
-  var rows = '';
-  (t.newItems||[]).forEach(function(it){
-    var key = plItemKey(today,it);
-    var isDone = t.done[key];
-    rows += '<div class="row" style="margin:3px 0;align-items:center">'+
-      '<input type="checkbox" class="plan-checkbox" '+(isDone?'checked':'')+' onclick="event.stopPropagation();sidePlToggle(\''+it.replace(/'/g,"\\'")+'\',this.checked)">'+
-      '<span style="flex:1;font-size:13px;'+(isDone?'text-decoration:line-through;color:var(--ink-soft)':'font-weight:600;color:var(--c-plan)')+'">'+it+'</span>'+
-      '<span class="chip" style="font-size:10px;padding:1px 6px;background:#e8eef5;color:var(--c-plan)">新学</span>'+
-      '</div>';
-  });
-  (t.reviews||[]).forEach(function(it){
-    var key = plItemKey(today,it);
-    var isDone = t.done[key];
-    rows += '<div class="row" style="margin:3px 0;align-items:center">'+
-      '<input type="checkbox" class="plan-checkbox" '+(isDone?'checked':'')+' onclick="event.stopPropagation();sidePlToggle(\''+it.replace(/'/g,"\\'")+'\',this.checked)">'+
-      '<span style="flex:1;font-size:13px;'+(isDone?'text-decoration:line-through;color:var(--ink-soft)':'color:var(--ink-soft)')+'">↻ '+it+'</span>'+
-      '<span class="chip" style="font-size:10px;padding:1px 6px;background:#f0ebe0;color:var(--ink-soft)">复习</span>'+
-      '</div>';
-  });
-
-  return '<div class="panel" style="cursor:pointer" onclick="showModule(\'planner\')">'+
-    '<div class="spread"><h3 style="margin-top:0;margin-bottom:0">📖 今日背诵</h3>'+
-    '<a class="btn ghost sm" href="javascript:showModule(\'planner\')" onclick="event.stopPropagation()">去计划 ›</a></div>'+
-    (total? '<div class="row" style="margin:6px 0"><span class="chip">完成 '+doneCount+'/'+total+'</span><span class="chip">'+pct+'%</span></div>'+
-      '<div class="bar" style="--accent:var(--c-plan)"><i style="width:'+pct+'%"></i></div>'+
-      '<div style="margin-top:8px">'+rows+'</div>'
-    : '<p class="muted" style="font-size:13px;margin:6px 0">今日无背诵任务</p>')+
-    '</div>';
+/* 「每日任务」页（P1）里的背诵分区：按查看日期渲染，遍历所有计划分组 */
+function plTaskPageHTML(dateStr){
+  var groups = plAllPlansToday(dateStr);
+  if(!groups.length) return '';
+  var html = '<div style="border-top:1px dashed var(--line);margin-top:10px;padding-top:6px">';
+  groups.forEach(function(g){ html += plPlanGroupHTML(g.plan, dateStr); });
+  html += '</div>';
+  return html;
 }
+
 
 function plSavePlan(){
   var cfg = plGetConfig();
   if(!cfg.startDate){ toast('请先设置开始日期'); return; }
-  if(!state.planner.savedPlans) state.planner.savedPlans = [];
-  var existing = state.planner.savedPlans.findIndex(function(p){return p.name === cfg.name});
-  if(existing >= 0){
-    state.planner.savedPlans[existing] = Object.assign({}, cfg);
-    toast('已更新计划「'+cfg.name+'」');
+  var p = state.planner;
+  if(!Array.isArray(p.plans)) p.plans = [];
+  var PICK = ['name','naming','listName','startYear','perYear','years','startDate','perDay','reverse','intervals'];
+  // 当前编辑中的计划 id（编辑已有 or 新建）
+  var editId = p._editId || '';
+  var target = editId ? plPlanById(editId) : null;
+  if(!target){
+    // 同名则视为更新
+    target = p.plans.find(function(x){ return x.name === cfg.name; }) || null;
+  }
+  if(target){
+    PICK.forEach(function(k){ if(cfg[k]!==undefined) target[k] = cfg[k]; });
+    target.done = target.done || {};
+    target.carry = target.carry || {};
+    p._editId = target.id;
+    toast('已更新计划「'+target.name+'」（已生效）');
   }else{
-    state.planner.savedPlans.push(Object.assign({}, cfg));
-    toast('已保存计划「'+cfg.name+'」');
+    var np = { id: plNewId(), done:{}, carry:{} };
+    PICK.forEach(function(k){ if(cfg[k]!==undefined) np[k] = cfg[k]; });
+    p.plans.push(np);
+    p._editId = np.id;
+    toast('已新建计划「'+np.name+'」（已生效）');
   }
   persist();
   renderPlanner($('#main'));
+  plShowResult();
+  plRefreshAll();
 }
 
-function plLoadPlan(i){
-  var sp = (state.planner.savedPlans||[])[i];
-  if(!sp) return;
-  state.planner = Object.assign({}, state.planner, sp);
-  state.planner.done = state.planner.done || {};
+/* 编辑某个计划（载入到生成器编辑区） */
+function plEditPlan(id){
+  var pl = plPlanById(id);
+  if(!pl) return;
+  var p = state.planner;
+  ['name','naming','listName','startYear','perYear','years','startDate','perDay','reverse','intervals'].forEach(function(k){
+    if(pl[k]!==undefined) p[k] = pl[k];
+  });
+  p._editId = id;
   persist();
   renderPlanner($('#main'));
-  toast('已载入计划「'+sp.name+'」');
+  plShowResult();
+  toast('正在编辑「'+pl.name+'」');
 }
+/* 兼容旧入口 */
+function plLoadPlan(i){ var arr=(state.planner.plans||[]); if(arr[i]) plEditPlan(arr[i].id); }
 
 function plDeletePlan(i){
-  if(!state.planner.savedPlans) return;
-  state.planner.savedPlans.splice(i, 1);
+  var arr = state.planner.plans || [];
+  var pl = arr[i];
+  if(!pl) return;
+  if(!confirm('确定删除计划「'+pl.name+'」？该计划的打卡记录也会一并删除。')) return;
+  // 记录删除墓碑，保证多设备同步时不复活
+  if(!Array.isArray(state.planner.plansDeleted)) state.planner.plansDeleted=[];
+  if(state.planner.plansDeleted.indexOf(pl.id)<0) state.planner.plansDeleted.push(pl.id);
+  arr.splice(i,1);
+  if(state.planner._editId===pl.id) state.planner._editId='';
   persist();
   renderPlanner($('#main'));
-  toast('已删除');
+  plRefreshAll();
+  toast('已删除计划「'+pl.name+'」');
+}
+/* 新建：清空编辑区进入新计划 */
+function plNewPlan(){
+  var p = state.planner;
+  p._editId = '';
+  persist();
+  renderPlanner($('#main'));
+  toast('已切换到「新建计划」，填好参数后点保存');
 }
 
 function plPrint(){
