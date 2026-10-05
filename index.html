@@ -5730,36 +5730,57 @@ function mergeForCloud(local, remote){
   out._mtime=Date.now();
   return out;
 }
-/* 背诵计划多计划合并：按 id 对齐，done/carry 取并集 */
+/* 背诵计划多计划合并：按 id 对齐；记录类(done/carry)取并集；设置类字段按各自更新时间取新 */
 function plannerMerge(localP, remoteP, baseP){
   localP=localP||{}; remoteP=remoteP||{};
   var out=baseP?Object.assign({},baseP):{};
-  // 顶层配置字段：以较新的 _mtime 一方为准（沿用 deepMerge 结果），这里只补 plans
   var lp=(localP.plans||[]), rp=(remoteP.plans||[]);
+  var lTime=localP._t||localP._mtime||0, rTime=remoteP._t||remoteP._mtime||0;
   var map={}, order=[];
-  function take(arr){
+  function take(arr, side){   // side: 'l' | 'r'
     arr.forEach(function(pl){
       if(!pl||!pl.id) return;
-      if(!map[pl.id]){ map[pl.id]=Object.assign({},pl); map[pl.id].done=Object.assign({},pl.done||{}); map[pl.id].carry=Object.assign({},pl.carry||{}); order.push(pl.id); }
-      else{
-        var cur=map[pl.id];
-        // 非记录类字段：后者（按顺序 lp 先 rp 后）覆盖空值
-        Object.keys(pl).forEach(function(k){
-          if(k==='done'||k==='carry') return;
-          if(pl[k]!==undefined && pl[k]!=='' && pl[k]!==null) cur[k]=pl[k];
-        });
-        cur.done=Object.assign(cur.done||{}, pl.done||{});
-        cur.carry=Object.assign(cur.carry||{}, pl.carry||{});
+      var isNew = !map[pl.id];
+      if(isNew){
+        map[pl.id]=Object.assign({},pl);
+        map[pl.id].done=Object.assign({},pl.done||{});
+        map[pl.id].carry=Object.assign({},pl.carry||{});
+        map[pl.id]._side=side;
+        order.push(pl.id);
+        return;
       }
+      var cur=map[pl.id];
+      // 设置类字段（名字/参数）：谁的更新时间新，用谁的（plan 自带 _t，否则用整份数据的 _mtime）
+      var plT = pl._t || (side==='l'?lTime:rTime);
+      var curT = cur._t || (cur._side==='l'?lTime:rTime);
+      var thisNewer = plT >= curT;
+      Object.keys(pl).forEach(function(k){
+        if(k==='done'||k==='carry'||k==='_side') return;
+        if(pl[k]===undefined||pl[k]===''||pl[k]===null) return;
+        if(thisNewer) cur[k]=pl[k];
+        else if(cur[k]===undefined||cur[k]===''||cur[k]===null) cur[k]=pl[k];
+      });
+      if(thisNewer) cur._side=side;
+      // 记录类：取并集（勾选/顺延绝不丢）
+      Object.keys(pl.done||{}).forEach(function(k){ if(pl.done[k]) cur.done[k]=true; });
+      Object.keys(pl.carry||{}).forEach(function(k){ if(pl.carry[k]) cur.carry[k]=pl.carry[k]; });
+      // done 的取消：只在该侧『严格更新』时才同步删除，避免同 _t 反向取消把并集擦掉
+      var plT2 = pl._t || (side==='l'?lTime:rTime);
+      var curT2 = cur._t || (cur._side==='l'?lTime:rTime);
+      if(plT2 > curT2){
+        Object.keys(cur.done||{}).forEach(function(k){
+          if(!(pl.done&&pl.done[k])) delete cur.done[k];
+        });
+      }
+      var _t=cur._t; delete cur._t; if(_t) cur._t=_t; else delete cur._t;
     });
   }
-  take(lp); take(rp);
-  var plans=order.map(function(id){ return map[id]; });
+  take(lp,'l'); take(rp,'r');
+  var plans=order.map(function(id){ var o=map[id]; delete o._side; return o; });
   // 删除墓碑：某计划被删除时记录 id，合并时过滤
   var delIds=new Set([].concat(localP.plansDeleted||[], remoteP.plansDeleted||[]));
   if(delIds.size){ plans=plans.filter(function(pl){ return !delIds.has(pl.id); }); out.plansDeleted=Array.from(delIds); }
   out.plans=plans;
-  // 当前编辑中的计划 id 尽量保留本地
   if(localP._editId) out._editId=localP._editId;
   return out;
 }
@@ -6537,19 +6558,16 @@ function plRefreshAll(justDayKey){
     if(main && current==='planner'){
       var res=document.getElementById('plResult');
       var wasOpen = !!(res && res.style.display!=='none');
-      // 快照：每张卡展开状态、哪些"已完成的天"被展开了、滚动位置
-      var snap={}, openDays={};
+      // 快照：每张卡展开状态、两块(已完成/未开始)展开状态、滚动位置
+      var snap={}, openRest={};
       document.querySelectorAll('#plResult .pl-plan-card').forEach(function(c){
         var pid=c.getAttribute('data-pid');
         var b=c.querySelector('.pl-plan-body');
         snap[pid]= !!(b && b.style.display!=='none');
-        // 记录这一天被用户点开的状态
-        c.querySelectorAll('tr.day-fold-toggle').forEach(function(tr){
-          if(tr.getAttribute('data-open')==='1'){
-            var dr=tr.nextElementSibling;
-            var dk=dr ? dr.getAttribute('data-daykey') : '';
-            if(dk) openDays[dk]=1;
-          }
+        openRest[pid]={};
+        c.querySelectorAll('tr.rest-fold-toggle').forEach(function(rt){
+          var cls = rt.classList.contains('rest-done') ? 'done' : 'future';
+          if(rt.getAttribute('data-open')==='1') openRest[pid][cls]=1;
         });
       });
       var sy=window.scrollY || (document.documentElement&&document.documentElement.scrollTop) || 0;
@@ -6558,30 +6576,19 @@ function plRefreshAll(justDayKey){
         var box=$('#plResult'), btn=$('#plResultBtn');
         if(box) box.style.display='';
         if(btn) btn.textContent='▾ 全部收起';
-        // 先全部折叠到默认态，再按快照恢复（保证状态一致）
         plAutoCollapseDone();
-        // 恢复每张卡展开状态
         document.querySelectorAll('#plResult .pl-plan-card').forEach(function(c){
           var pid=c.getAttribute('data-pid');
           var b=c.querySelector('.pl-plan-body'), a=c.querySelector('.pl-card-arrow');
           if(b) b.style.display = snap[pid] ? '' : 'none';
           if(a) a.textContent = snap[pid] ? '▾ 收起' : '▸ 点开';
+          if(snap[pid] && openRest[pid]){
+            c.querySelectorAll('tr.rest-fold-toggle').forEach(function(rt){
+              var cls = rt.classList.contains('rest-done') ? 'done' : 'future';
+              if(openRest[pid][cls]) plToggleRest(rt);
+            });
+          }
         });
-        // 恢复"被展开的那一天"
-        document.querySelectorAll('#plResult tr.day-fold-toggle').forEach(function(tr){
-          var dr=tr.nextElementSibling;
-          var dk=dr ? dr.getAttribute('data-daykey') : '';
-          if(dk && openDays[dk]) plToggleDay(tr, dk);
-        });
-        // 注意：本次操作刚好"勾完的那一天"也保持展开（不立刻收起，避免勾完就跳走）
-        if(justDayKey){
-          document.querySelectorAll('#plResult tr.day-fold-toggle').forEach(function(tr){
-            var dr=tr.nextElementSibling;
-            if(dr && dr.getAttribute('data-daykey')===justDayKey && tr.getAttribute('data-open')!=='1'){
-              plToggleDay(tr, justDayKey);
-            }
-          });
-        }
         // 恢复滚动位置
         window.scrollTo(0, sy);
       }
@@ -6616,7 +6623,7 @@ function plBuildTableHTML(cfg, planId){
   var done = (plan && plan.done) ? plan.done : (state.planner.done || {});
 
   var totalTasks = 0, doneCount = 0;
-  var fullDays = 0, partDays = 0;
+  var fullDays = 0, futureDays = 0;
 
   function itemRow(dateStr, item, baseCls){
     var key = plItemKey(dateStr, item);
@@ -6624,44 +6631,55 @@ function plBuildTableHTML(cfg, planId){
     totalTasks++;
     if(isDone) doneCount++;
     var esc = String(item).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-    // 已完成的行：默认隐藏（加 done-line 类，由开关控制显隐）
-    return '<div class="'+(isDone?'done-item done-line':'')+' '+(isDone?'':baseCls)+'">' +
+    return '<div class="'+(isDone?'done-item':'')+' '+(isDone?'':baseCls)+'">' +
       '<input type="checkbox" class="plan-checkbox" '+(isDone?'checked':'')+' onchange="plToggle2(\''+pid+'\',\''+dateStr+'\',\''+esc+'\', this.checked)">' +
       '<span>'+item+'</span></div>';
   }
 
-  var rows = days.map(function(d){
+  // 分三类：①今天及过去未完成(直接显示) ②已完成(折) ③未来(折)
+  var showRows = [], doneRows = [], futureRows = [];
+  days.forEach(function(d){
     var s = schedule[d];
     var dateStr = plDateStr(s.date);
     var isToday = dateStr === today;
+    var isPast = dateStr < today;
     var dayLabel = ['\u65e5','\u4e00','\u4e8c','\u4e09','\u56db','\u4e94','\u516d'][s.date.getDay()];
 
     var allItems = (s.newItems||[]).concat(s.reviews||[]);
-    if(!allItems.length) return '';
+    if(!allItems.length) return;
 
-    // 整天完成度：这天所有条目都勾了 => 整个表格行（日期+内容）一起折叠
     var dayDone = allItems.filter(function(it){ return !!done[plItemKey(dateStr,it)]; }).length;
     var dayFull = (dayDone === allItems.length && allItems.length>0);
-    if(dayFull) fullDays++; else partDays++;
+    if(dayFull) fullDays++;
+    if(!isToday && !isPast) futureDays++;
 
     var newHTML = s.newItems.map(function(item){ return itemRow(dateStr, item, 'new-item'); }).join('');
     var revHTML = s.reviews.map(function(item){ return itemRow(dateStr, item, 'review-item'); }).join('');
-    var cellContent = newHTML + revHTML;
-    var dayKey = pid+'|'+dateStr;
-
-    var dataRow = '<tr class="'+(isToday?'today-row':'')+(dayFull?' day-foldable day-full':'')+'" data-daykey="'+dayKey+'">' +
+    var rowHTML = '<tr class="'+(isToday?'today-row':'')+(dayFull?' day-full':'')+'" data-daykey="'+pid+'|'+dateStr+'">' +
       '<td class="date-col">'+dateStr+'<br><span class="day-label">\u5468'+dayLabel+'</span></td>' +
-      '<td>'+cellContent+'</td></tr>';
+      '<td>'+newHTML+revHTML+'</td></tr>';
 
-    // 已完成的那天：整行收起来，另起一行只放一个可点的小三角（点它才展开原来那一行）
-    if(dayFull){
-      return '<tr class="day-fold-toggle" onclick="plToggleDay(this,\''+dayKey+'\')" style="cursor:pointer">' +
-        '<td class="date-col" style="color:var(--ink-soft);font-size:12px">'+dateStr+'<br><span class="day-label">\u5468'+dayLabel+'</span></td>' +
-        '<td style="color:var(--ink-soft);font-size:12px">✅ 已完成（'+allItems.length+'项） <span class="day-arrow">▸ 点击展开</span></td></tr>' +
-        dataRow;
-    }
-    return dataRow;
-  }).filter(function(r){return r}).join('');
+    // 规则：①今天永不折 ②过去已完成→已完成块 ③未来→未开始块 ④其余(过去未完成)→直接显示
+    if(isToday) showRows.push(rowHTML);
+    else if(dayFull) doneRows.push(rowHTML);
+    else if(!isPast) futureRows.push(rowHTML);
+    else showRows.push(rowHTML);
+  });
+
+  var rows = showRows.join('');
+  function foldBlock(label, arr, cls){
+    if(!arr.length) return '';
+    return '<tr class="rest-fold-toggle '+cls+'" onclick="plToggleRest(this)" style="cursor:pointer">' +
+        '<td colspan="2" style="color:var(--ink-soft);font-size:12px;background:#f6f3ec;text-align:center">' +
+          label+' <span class="rest-arrow">▸ 点击展开</span>' +
+        '</td></tr>' +
+      '<tr class="rest-fold-body"><td colspan="2" style="padding:0"><table style="width:100%;border-collapse:collapse"><tbody>' +
+        arr.join('') +
+      '</tbody></table></td></tr>';
+  }
+  var foldBlockHTML =
+    foldBlock('⬜ 未开始 '+futureRows.length+' 天', futureRows, 'rest-future') +
+    foldBlock('✅ 已完成 '+doneRows.length+' 天', doneRows, 'rest-done');
 
   return '<div class="pl-plan-block" data-pid="'+pid+'">' +
     (plan && (state.planner.plans||[]).length>1 ? '<div style="font-size:14px;font-weight:700;color:var(--c-plan);margin-bottom:8px">📖 '+(plan.name||'计划')+'</div>' : '') +
@@ -6671,29 +6689,31 @@ function plBuildTableHTML(cfg, planId){
     '<div class="stat-card"><b>'+days.length+'</b><span>\u603b\u5929\u6570</span></div>' +
     '<div class="stat-card"><b>'+doneCount+'/'+totalTasks+'</b><span>\u5b8c\u6210\u8fdb\u5ea6</span></div>' +
     '</div>' +
-    '<table class="plan-table" id="plTable_'+(pid||'_')+'" data-pid="'+pid+'"><thead><tr><th style="width:80px">\u65e5\u671f</th><th>\u5b66\u4e60 / \u590d\u4e60\u5185\u5bb9</th></tr></thead><tbody>'+rows+'</tbody></table>' +
+    '<table class="plan-table" id="plTable_'+(pid||'_')+'" data-pid="'+pid+'"><thead><tr><th style="width:80px">\u65e5\u671f</th><th>\u5b66\u4e60 / \u590d\u4e60\u5185\u5bb9</th></tr></thead><tbody>'+rows+foldBlockHTML+'</tbody></table>' +
     '</div>';
 }
-// 整行折叠：点小三角行 -> 显示/隐藏它下面那一整行（日期+内容）
-function plToggleDay(toggleRow, dayKey){
+// 「已完成 N 天 / 未开始 N 天」折叠块展开/收起
+function plToggleRest(toggleRow){
   if(!toggleRow) return;
-  var dataRow = toggleRow.nextElementSibling;
-  if(!dataRow) return;
+  var body = toggleRow.nextElementSibling;
+  if(!body) return;
   var open = toggleRow.getAttribute('data-open')==='1';
   var show = !open;
-  dataRow.style.display = show ? '' : 'none';
+  body.style.display = show ? '' : 'none';
   toggleRow.setAttribute('data-open', show?'1':'0');
-  var arrow = toggleRow.querySelector('.day-arrow');
+  var arrow = toggleRow.querySelector('.rest-arrow');
   if(arrow) arrow.textContent = show ? '▾ 点击收起' : '▸ 点击展开';
 }
-// 初次渲染后自动折叠已完成的那一天（整行收起，保留小三角行）
+// 旧入口兼容
+function plToggleDay(){}
+// 初次渲染后自动折叠「其余 N 天」块（默认收起）
 function plAutoCollapseDone(){
   try{
-    document.querySelectorAll('#plResult tr.day-fold-toggle').forEach(function(tr){
-      var dataRow = tr.nextElementSibling;
-      if(dataRow) dataRow.style.display='none';
+    document.querySelectorAll('#plResult tr.rest-fold-toggle').forEach(function(tr){
+      var body = tr.nextElementSibling;
+      if(body) body.style.display='none';
       tr.setAttribute('data-open','0');
-      var arrow = tr.querySelector('.day-arrow');
+      var arrow = tr.querySelector('.rest-arrow');
       if(arrow) arrow.textContent = '▸ 点击展开';
     });
   }catch(_){}
@@ -6707,8 +6727,8 @@ function plToggle2(planId, dateStr, item, checked){
   var key = plItemKey(dateStr, item);
   if(checked){ plan.done[key] = true; }
   else { delete plan.done[key]; }
+  plan._t = Date.now();
   persist();
-  // 把刚勾选的那天传下去：即使那天刚好勾完，也不要立刻把它折叠掉（避免"跳"）
   plRefreshAll(planId+'|'+dateStr);
 }
 // 兼容旧调用：作用于第一个计划
@@ -6823,10 +6843,11 @@ function plSavePlan(){
     PICK.forEach(function(k){ if(cfg[k]!==undefined) target[k] = cfg[k]; });
     target.done = target.done || {};
     target.carry = target.carry || {};
+    target._t = Date.now();          // 标记本次修改时间：多设备合并时以更新的一方为准
     p._editId = target.id;
     toast('已更新计划「'+target.name+'」（已生效）');
   }else{
-    var np = { id: plNewId(), done:{}, carry:{} };
+    var np = { id: plNewId(), done:{}, carry:{}, _t: Date.now() };
     PICK.forEach(function(k){ if(cfg[k]!==undefined) np[k] = cfg[k]; });
     p.plans.push(np);
     p._editId = np.id;
