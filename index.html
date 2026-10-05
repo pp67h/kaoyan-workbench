@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.10.5.1-->
+<!--APP_VER:2026.10.5.2-->
 <style>
 :root{
   --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
@@ -91,6 +91,26 @@ input,textarea,select{font-family:inherit;font-size:15px}
 @media(max-width:760px){
   .panel h2{font-size:16.5px}
   .spread h3,.panel h3{font-size:14px}
+}
+
+/* ===== 侧栏卡片折叠（手机端收起为一行，减少页面长度）===== */
+.side-head{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.side-head h3{margin:0}
+.side-key{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;
+  color:var(--ink-soft);white-space:nowrap;flex:0 0 auto}
+.side-arrow{font-size:11px;color:var(--ink-soft);opacity:.7;transition:transform .18s ease}
+.side-foldable.open .side-arrow{transform:rotate(90deg)}
+/* 手机：默认收起，只留一行标题+关键数字 */
+@media(max-width:1080px){
+  .side-foldable .side-body{display:none;margin-top:10px}
+  .side-foldable.open .side-body{display:block}
+  .side-foldable .side-head{padding:2px 0}
+}
+/* 平板/桌面：三栏里卡片始终展开，箭头与点击收起隐藏 */
+@media(min-width:1081px){
+  .side-foldable .side-arrow{display:none}
+  .side-head{cursor:default}
 }
 
 /* ===== 左侧导航 ===== */
@@ -5070,38 +5090,63 @@ function renderSide(){
       <button class="btn sm" onclick="pangpangTap()">点点胖胖</button>
     </div>
   </div>
-  <div class="panel">
-    <div class="spread"><h3 style="margin-top:0;margin-bottom:0">📝 今日任务</h3><a class="btn ghost sm" href="javascript:showModule('task')">去打卡 ›</a></div>
-    <div class="row" style="margin:6px 0">
-      <span class="chip">完成 ${done}/${tasks.length}</span>
-      <span class="chip">${pct}%</span>
-      <span class="chip">⏱ <span id="sideStudy">${fmtHMS(studyTotalDay(todayStr()))}</span></span>
+  <div class="panel side-foldable" data-sk="task">
+    <div class="side-head" onclick="sideFoldToggle('task')">
+      <h3 style="margin:0">📝 今日任务</h3>
+      <span class="side-key">${done}/${tasks.length}<span class="side-arrow">▸</span></span>
     </div>
-    <div class="bar" style="--accent:var(--c-task)"><i style="width:${pct}%"></i></div>
-    <div class="mini-tasks" style="margin-top:8px">
-      ${tasks.length? tasks.map(t=>`<div class="row" style="margin:4px 0;align-items:center">
-        <input type="checkbox" ${t.status==='done'?'checked':''} onchange="sideSetTask('${t.id}',this.checked)">
-        <span style="flex:1;font-size:13px;${t.status==='done'?'text-decoration:line-through;color:var(--ink-soft)':''}">${t.time!=='—'?t.time+' · ':''}${t.title}</span>
-        <span class="dotc" style="background:${SUBJ_COLOR[t.subj]||'#999'}"></span>
-      </div>`).join('') : '<p class="muted" style="font-size:13px">今日还没任务，去「每日打卡」添加。</p>'}
-      ${plTodayRowsHTML()}
-    </div>
-    <div class="row" style="margin-top:8px">
-      <a class="btn ghost sm" href="javascript:showModule('planner')" style="font-size:11px">📖 背诵计划 ›</a>
+    <div class="side-body">
+      <div class="row" style="margin:6px 0">
+        <span class="chip">完成 ${done}/${tasks.length}</span>
+        <span class="chip">${pct}%</span>
+        <span class="chip">⏱ <span id="sideStudy">${fmtHMS(studyTotalDay(todayStr()))}</span></span>
+      </div>
+      <div class="bar" style="--accent:var(--c-task)"><i style="width:${pct}%"></i></div>
+      <div class="mini-tasks" style="margin-top:8px">
+        ${tasks.length? tasks.map(t=>`<div class="row" style="margin:4px 0;align-items:center">
+          <input type="checkbox" ${t.status==='done'?'checked':''} onchange="sideSetTask('${t.id}',this.checked)">
+          <span style="flex:1;font-size:13px;${t.status==='done'?'text-decoration:line-through;color:var(--ink-soft)':''}">${t.time!=='—'?t.time+' · ':''}${t.title}</span>
+          <span class="dotc" style="background:${SUBJ_COLOR[t.subj]||'#999'}"></span>
+        </div>`).join('') : '<p class="muted" style="font-size:13px">今日还没任务，去「每日打卡」添加。</p>'}
+        ${plTodayRowsHTML()}
+      </div>
+      <div class="row" style="margin-top:8px">
+        <a class="btn ghost sm" href="javascript:showModule('task')" style="font-size:11px">📝 去打卡 ›</a>
+        <a class="btn ghost sm" href="javascript:showModule('planner')" style="font-size:11px">📖 背诵计划 ›</a>
+      </div>
     </div>
   </div>
-  <div class="panel" style="cursor:pointer" onclick="showModule('progress')">
-    <div class="spread"><h3 style="margin-top:0;margin-bottom:0">📊 进度概览</h3><a class="btn ghost sm" href="javascript:showModule('progress')" onclick="event.stopPropagation()">去编辑 ›</a></div>
-    ${engMini}
-    ${polMini}
-    <div class="stat-mini"><span>📚 专业课（${r}轮）</span><span></span></div>
-    ${knowMini}
-    <div class="stat-mini"><span>🔤 单词一刷</span><span>${state.vocab.y1}/${state.vocab.total}</span></div>
-    <div class="stat-mini"><span>当前阶段</span><span style="color:var(--c-home);font-weight:700">⭐ ${ph}</span></div>
+  <div class="panel side-foldable" data-sk="progress">
+    <div class="side-head" onclick="sideFoldToggle('progress')">
+      <h3 style="margin:0">📊 进度概览</h3>
+      <span class="side-key">⭐ ${ph}<span class="side-arrow">▸</span></span>
+    </div>
+    <div class="side-body">
+      <div class="row" style="margin:6px 0 8px">
+        <span class="chip">🇬🇧 英语</span><span class="chip">🇨🇳 政治</span><span class="chip">📚 专业课 ${r}轮</span>
+      </div>
+      ${engMini}
+      ${polMini}
+      <div class="stat-mini"><span>📚 专业课（${r}轮）</span><span></span></div>
+      ${knowMini}
+      <div class="stat-mini"><span>🔤 单词一刷</span><span>${state.vocab.y1}/${state.vocab.total}</span></div>
+      <div class="stat-mini"><span>当前阶段</span><span style="color:var(--c-home);font-weight:700">⭐ ${ph}</span></div>
+      <div class="row" style="margin-top:8px">
+        <a class="btn ghost sm" href="javascript:showModule('progress')" style="font-size:11px">✏️ 去编辑 ›</a>
+      </div>
+    </div>
   </div>
-  <div class="panel" style="cursor:pointer" onclick="showModule('cloud')">
-    <div class="spread"><h3 style="margin-top:0;margin-bottom:0">☁️ 云同步</h3><a class="btn ghost sm" href="javascript:showModule('cloud')" onclick="event.stopPropagation()">去同步 ›</a></div>
-    <div class="sub">备份 / 恢复 / 多端同步</div>
+  <div class="panel side-foldable" data-sk="cloud">
+    <div class="side-head" onclick="sideFoldToggle('cloud')">
+      <h3 style="margin:0">☁️ 云同步</h3>
+      <span class="side-key">${(state.sync&&state.sync.on)?'已开启':'未开启'}<span class="side-arrow">▸</span></span>
+    </div>
+    <div class="side-body">
+      <div class="sub">备份 / 恢复 / 多端同步</div>
+      <div class="row" style="margin-top:8px">
+        <a class="btn ghost sm" href="javascript:showModule('cloud')" style="font-size:11px">☁️ 去同步 ›</a>
+      </div>
+    </div>
   </div>`;
   return html;
 }
@@ -5109,7 +5154,29 @@ function sideSetTask(id,checked){
   const d=todayStr(); const t=state.tasks[d].find(x=>x.id===id); if(!t)return;
   t.status=checked?'done':'todo'; persist();
   const main=document.querySelector('#main'); if(main && current==='task') renderTask(main);
-  $('#side').innerHTML=renderSide();
+  sideRenderKeepFold();
+}
+/* 重绘侧栏并保持各卡片折叠状态（避免勾选后卡片跳回收起/展开） */
+function sideRenderKeepFold(){
+  try{
+    const open={};
+    document.querySelectorAll('#side .side-foldable').forEach(el=>{
+      open[el.getAttribute('data-sk')]=el.classList.contains('open');
+    });
+    $('#side').innerHTML=renderSide();
+    document.querySelectorAll('#side .side-foldable').forEach(el=>{
+      if(open[el.getAttribute('data-sk')]) el.classList.add('open');
+    });
+  }catch(_){ $('#side').innerHTML=renderSide(); }
+}
+/* 手机端点击卡片标题：展开/收起 */
+function sideFoldToggle(key){
+  try{
+    if(window.innerWidth>1080) return;   // 平板三栏下始终展开，不响应
+    const el=document.querySelector('#side .side-foldable[data-sk="'+key+'"]');
+    if(!el) return;
+    el.classList.toggle('open');
+  }catch(_){}
 }
 function exportBackup(){
   const data=state||load('state',{});
