@@ -6276,7 +6276,7 @@ function plToggleResult(){
       if(body) body.style.display='';
       if(arrow) arrow.textContent='▾ 收起';
     });
-    setTimeout(plAutoCollapseDone, 0);
+    plAutoCollapseDone();
   }
 }
 function plShowResult(){
@@ -6293,7 +6293,7 @@ function plShowResult(){
     if(body) body.style.display = open ? '' : 'none';
     if(arrow) arrow.textContent = open ? '▾ 收起' : '▸ 点开';
   });
-  setTimeout(plAutoCollapseDone, 0);
+  plAutoCollapseDone();
 }
 
 function plSwitchMode(mode){
@@ -6526,7 +6526,9 @@ function plCancelCarry(planId, toDate, item){
   plRefreshAll();
   toast('已取消顺延「'+item+'」');
 }
-// 顺延/取消后统一刷新 P1 + P2 + 计划表
+// 顺延/取消/勾选后统一刷新 P1 + P2 + 计划表
+// 关键：重建计划页时保留「每张卡的展开状态」「显示已完成状态」「滚动位置」，
+// 否则一勾选页面就跳走、表收起来，看起来像闪退
 function plRefreshAll(){
   try{ var side=document.querySelector('#side'); if(side) side.innerHTML=renderSide(); }catch(_){}
   try{ var ptr=document.getElementById('plTaskRows'); if(ptr) ptr.innerHTML=plTaskPageHTML(taskViewDate||todayStr()); }catch(_){}
@@ -6535,13 +6537,41 @@ function plRefreshAll(){
     if(main && current==='planner'){
       var res=document.getElementById('plResult');
       var wasOpen = !!(res && res.style.display!=='none');
+      // 快照：每张卡展开状态、已完成展开状态、滚动位置
+      var snap={};
+      document.querySelectorAll('#plResult .pl-plan-card').forEach(function(c){
+        var pid=c.getAttribute('data-pid');
+        var b=c.querySelector('.pl-plan-body');
+        var t=c.querySelector('.pl-done-toggle');
+        snap[pid]={
+          open: !!(b && b.style.display!=='none'),
+          shown: !!(t && t.getAttribute('data-shown')==='1')
+        };
+      });
+      var sy=window.scrollY || (document.documentElement&&document.documentElement.scrollTop) || 0;
       renderPlanner(main);
       if(wasOpen){
         var box=$('#plResult'), btn=$('#plResultBtn');
         if(box) box.style.display='';
         if(btn) btn.textContent='▾ 全部收起';
-        setTimeout(plAutoCollapseDone, 0);
+        // 先全部折叠到默认态，再按快照恢复（保证状态一致）
+        plAutoCollapseDone();
+        // 恢复每张卡状态（同步，避免任何跳动/闪烁）
+        document.querySelectorAll('#plResult .pl-plan-card').forEach(function(c){
+          var pid=c.getAttribute('data-pid');
+          var st=snap[pid]||{open:false,shown:false};
+          var b=c.querySelector('.pl-plan-body'), a=c.querySelector('.pl-card-arrow');
+          if(b) b.style.display = st.open ? '' : 'none';
+          if(a) a.textContent = st.open ? '▾ 收起' : '▸ 点开';
+          if(st.open && st.shown){
+            var t=c.querySelector('.pl-done-toggle');
+            if(t) plToggleDoneRows(t, pid);
+          }
+        });
+        // 恢复滚动位置
+        window.scrollTo(0, sy);
       }
+      else { plAutoCollapseDone(); }
     }
   }catch(_){}
 }
