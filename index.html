@@ -1871,6 +1871,7 @@ function renderTask(main){
     </div>
     <div class="sub">◀▶ 查看任一天${d!==todayStr()?' · <a href="javascript:copyAllToToday()" style="color:var(--c-task);font-weight:600">📋 复制全部到今天</a>':''}</div>
     <div id="taskList"></div>
+    <div id="plTaskRows" style="margin-top:6px"></div>
     <div class="row" style="margin-top:8px">
       <input type="text" id="ntTitle" placeholder="任务内容，如：背发展心理学第5章" style="flex:2">
       <select id="ntSubj" style="flex:1;max-width:110px">
@@ -1887,6 +1888,8 @@ function renderTask(main){
   main.innerHTML=html;
   studyInitCard();
   $('#taskList').innerHTML=tasks.length?tasks.map(t=>taskHTML(t)).join(''):'';
+  var plRows=document.getElementById('plTaskRows');
+  if(plRows) plRows.innerHTML=plTaskPageHTML(d);
 }
 function taskShiftDay(n){
   const cur=taskViewDate.split('-').map(Number);   // [Y,M,D] 按本地
@@ -6393,8 +6396,10 @@ function plToggle(dateStr, item, checked){
   persist();
   var result = $('#plResult');
   if(result) result.innerHTML = plBuildTableHTML(state.planner);
-  // 同步刷新侧栏今日背诵
+  // 同步刷新侧栏今日背诵 + 每日任务页的背诵分区
   var side=$('#side'); if(side) side.innerHTML=renderSide();
+  var ptr=document.getElementById('plTaskRows');
+  if(ptr) ptr.innerHTML=plTaskPageHTML(taskViewDate||todayStr());
 }
 
 /* 获取今日背诵任务（新学 + 复习 + 顺延进来），用于侧栏展示 */
@@ -6459,6 +6464,43 @@ function plTodayStat(){
   var doneCount = 0;
   items.forEach(function(it){ if(t.done[plItemKey(today,it)]) doneCount++; });
   return {done:doneCount, total:items.length};
+}
+
+/* 「每日任务」页（P1）里的背诵分区：按查看日期渲染，勾选/顺延均生效 */
+function plTaskPageHTML(dateStr){
+  var p = state.planner || {};
+  var full = plDayItemsFull(dateStr);
+  var newItems = (full.newItems||[]).concat(full.carryNew||[]);
+  var reviews  = (full.reviews||[]).concat(full.carryReview||[]);
+  if(!newItems.length && !reviews.length) return '';
+  var done = p.done || {};
+  function esc(s){ return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+  function mkRow(item, kind){
+    var key = plItemKey(dateStr, item);
+    var isDone = !!done[key];
+    var tag = kind==='review'
+      ? '<span class="chip" style="font-size:10px;padding:1px 6px;background:#f0ebe0;color:var(--ink-soft)">复习</span>'
+      : '<span class="chip" style="font-size:10px;padding:1px 6px;background:#e8eef5;color:var(--c-plan)">新学</span>';
+    var prefix = kind==='review' ? '↻ ' : '';
+    return '<div class="row" style="margin:4px 0;align-items:center;padding-left:2px">'+
+      '<input type="checkbox" class="plan-checkbox" '+(isDone?'checked':'')+' onchange="plToggle(\''+dateStr+'\',\''+esc(item)+'\',this.checked)">'+
+      '<span style="flex:1;font-size:13px;'+(isDone?'text-decoration:line-through;color:var(--ink-soft)':(kind==='review'?'color:var(--ink-soft)':'font-weight:600;color:var(--c-plan)'))+'">'+prefix+item+'</span>'+
+      tag+
+      (isDone?'':'<button class="btn ghost sm" style="font-size:10px;padding:1px 6px;margin-left:4px" onclick="plCarryToNextDay(\''+dateStr+'\',\''+esc(item)+'\',\''+kind+'\')" title="顺延到第二天">→明天</button>')+
+      '</div>';
+  }
+  var html = '<div style="border-top:1px dashed var(--line);margin-top:10px;padding-top:6px">';
+  html += '<div style="font-size:12px;color:var(--c-plan);font-weight:700;margin-bottom:2px">📖 背诵'+(dateStr===todayStr()?' · 今日':' · '+dateStr)+'</div>';
+  if(newItems.length){
+    html += '<div style="font-size:11px;color:var(--ink-soft);margin:4px 0 2px">新学 '+newItems.length+'</div>';
+    newItems.forEach(function(it){ html += mkRow(it,'new'); });
+  }
+  if(reviews.length){
+    html += '<div style="font-size:11px;color:var(--ink-soft);margin:6px 0 2px">复习 '+reviews.length+'</div>';
+    reviews.forEach(function(it){ html += mkRow(it,'review'); });
+  }
+  html += '</div>';
+  return html;
 }
 
 
