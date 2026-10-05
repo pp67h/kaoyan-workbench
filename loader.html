@@ -79,14 +79,14 @@
       document.open();
       document.write(html);
       document.close();
-      // 兜底：3秒后检查是否还在加载页
+      // 兜底：8 秒后检查是否还在加载页（原为 3 秒，新版页面更重，放宽）
       writeTimer=setTimeout(function(){
         try{
           // 如果还能执行到这里，说明 document.write 可能没生效
           // 改用跳转方式
           location.replace(REMOTE_URL+'?t='+Date.now());
         }catch(e){}
-      }, 3000);
+      }, 8000);
     }catch(e){
       // 写入失败，跳转远程
       try{ location.replace(REMOTE_URL+'?t='+Date.now()); }
@@ -104,21 +104,29 @@
     doFetch();
   };
 
+  function setPct(p){
+    // 进度提示：慢网下让用户知道还在下载，而不是以为卡死
+    try{
+      if(p>=100){ setTip('加载完成，正在进入…', true); return; }
+      setTip('正在下载最新版 '+p+'%', true);
+    }catch(_){}
+  }
+
   function doFetch(){
     try{
-      var ts=Date.now();
-      var rand=Math.random().toString(36).slice(2,10);
-      var url=REMOTE_URL+'?t='+ts+'&r='+rand+'&v=2026.9.2';
+      // 【缓存策略】不再拼 ?t=随机数 —— 那样每次都被当成新网址，必然重下整个 1.15MB。
+      // 直接请求固定地址，交给浏览器用 etag/last-modified 协商缓存：
+      //   · 没更新 → 服务器回 304，几乎 0 流量、秒开
+      //   · 有更新 → 自动下载新版
+      var url=REMOTE_URL;
       var xhr=new XMLHttpRequest();
       xhr.open('GET', url, true);
-      xhr.timeout=8000;
-      xhr.setRequestHeader('Cache-Control', 'no-cache');
-      xhr.setRequestHeader('Pragma', 'no-cache');
+      xhr.timeout=60000;              // 首次下载 1.15MB 需要时间，给足 60 秒
       xhr.onload=function(){
         if(xhr.status>=200 && xhr.status<300 && xhr.responseText && xhr.responseText.length>500){
-          // 提取版本号
           var m=xhr.responseText.match(/APP_VER:([\d.]+)/);
           var ver=m?m[1]:'?';
+          try{ localStorage.setItem('app_ver', ver); }catch(_){}
           setVer('远程版本 v'+ver);
           once(function(){ loadRemote(xhr.responseText); });
         }else{
@@ -127,6 +135,14 @@
       };
       xhr.onerror=function(){ handleFail('网络错误'); };
       xhr.ontimeout=function(){ handleFail('连接超时'); };
+      // 下载进度（仅下载阶段可拿到总长）
+      xhr.onprogress=function(ev){
+        try{
+          if(ev && ev.lengthComputable && ev.total>0){
+            setPct(Math.min(99, Math.round(ev.loaded/ev.total*100)));
+          }
+        }catch(_){}
+      };
       xhr.send();
     }catch(e){
       handleFail(e.message||'加载出错');
@@ -144,12 +160,12 @@
     showRetry();
   }
 
-  // 10 秒兜底超时
+  // 70 秒兜底超时（与 xhr.timeout 60 秒配套，留 10 秒余量）
   loadTimer=setTimeout(function(){
     setTip('加载太慢，用本地版本', true);
     once(loadLocal);
     showRetry();
-  }, 10000);
+  }, 70000);
 
   // 显示本地版本（如果有的话）
   try{
