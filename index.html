@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.10.5.9-->
+<!--APP_VER:2026.10.5.10-->
 <style>
 :root{
   --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
@@ -1101,16 +1101,15 @@ function renderHome(main){
   const examLabel=examMM+'月'+examDD+'日';
   // 默认关键节点 + 用户自定义
   const kds = (Array.isArray(state.keyDates) && state.keyDates.length) ? state.keyDates : KEY_DATES;
-  // 筛选：考研初试（big）、正式报名、网上确认 为重点展示
+  // 显示位置：k.pos 优先（top=上面 more=更多里 hide=不显示）；未设置时沿用默认分派
   const mainNodes=[];
   const otherNodes=[];
   kds.forEach((k,i)=>{
-    if(k.big || k.n==='正式报名' || k.n==='网上确认'){
-      mainNodes.push({k,i});
-    }else{
-      otherNodes.push({k,i});
-    }
+    const pos=k.pos||((k.big || k.n==='正式报名' || k.n==='网上确认')?'top':'more');
+    if(pos==='top'){ mainNodes.push({k,i}); }
+    else if(pos==='more'){ otherNodes.push({k,i}); }
   });
+  const hiddenCount=kds.filter(k=>k.pos==='hide').length;
   // 考研初试（big）放在最前面
   mainNodes.sort((a,b)=>{
     if(a.k.big && !b.k.big) return -1;
@@ -1123,16 +1122,17 @@ function renderHome(main){
     const isCurrent = k.d.match(/^\d{4}-\d{2}-\d{2}$/) && k.d===state.examDate;
     const cls = isBig ? 'kd big' : isPast ? 'kd past' : isCurrent ? 'kd on' : 'kd';
     if(small){
-      return `<div class="${cls} kd-sm" style="position:relative">
+      return `<div class="${cls} kd-sm" style="position:relative;cursor:pointer" onclick="editKeyDate(${i})">
         <div class="kd-ico-sm">${k.ico||'📌'}</div>
         <div class="kd-tx-sm"><div class="kd-n-sm">${k.n}</div><div class="kd-d-sm">${k.m||k.d}</div></div>
+        <span style="position:absolute;top:3px;right:6px;font-size:10px;color:#b9a77f">✎</span>
       </div>`;
     }
-    return `<div class="${cls}" style="position:relative">
+    return `<div class="${cls}" style="position:relative;cursor:pointer" onclick="editKeyDate(${i})">
       <div class="kd-ico">${k.ico||'📌'}</div>
       <div class="kd-tx"><div class="kd-n">${k.n}</div><div class="kd-d">${k.m||k.d}</div></div>
-      <button onclick="editKeyDate(${i})" title="编辑" style="position:absolute;top:4px;right:26px;background:rgba(255,255,255,.7);border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:12px;color:#888">✎</button>
-      <button onclick="delKeyDate(${i})" title="删除" style="position:absolute;top:4px;right:4px;background:rgba(255,255,255,.7);border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:13px;color:#888">×</button>
+      <button onclick="event.stopPropagation();editKeyDate(${i})" title="编辑" style="position:absolute;top:4px;right:26px;background:rgba(255,255,255,.7);border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:12px;color:#888">✎</button>
+      <button onclick="event.stopPropagation();delKeyDate(${i})" title="删除" style="position:absolute;top:4px;right:4px;background:rgba(255,255,255,.7);border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:13px;color:#888">×</button>
     </div>`;
   }
   const mainCells=mainNodes.map(({k,i})=>kdHTML(k,i,false)).join('');
@@ -1199,7 +1199,10 @@ function renderHome(main){
       <input type="text" id="kdI" placeholder="emoji" style="max-width:60px">
       <button class="btn sm" onclick="addKeyDate()">添加</button>
     </div>
-    <button class="btn sm" style="margin-top:6px" onclick="resetKeyDates()">恢复默认节点</button>
+    <div class="row" style="margin-top:6px">
+      <button class="btn sm" onclick="resetKeyDates()">恢复默认节点</button>
+      ${hiddenCount?`<span class="chip" style="cursor:pointer" onclick="manageHidden()" title="管理已隐藏的节点">🙈 ${hiddenCount} 个已隐藏 ›</span>`:''}
+    </div>
     <hr>
     <div class="spread"><span class="muted">今日鼓励</span><span class="pill">第${(dayIdx%ENCOURAGE.length)+1}句</span></div>
     <p style="margin:6px 0;font-size:15px">"${enc}"</p>
@@ -1248,27 +1251,66 @@ function addKeyDate(){
 function editKeyDate(i){
   if(!Array.isArray(state.keyDates)||!state.keyDates.length) state.keyDates=JSON.parse(JSON.stringify(KEY_DATES));
   const k=state.keyDates[i];
+  const pos=k.pos||((k.big || k.n==='正式报名' || k.n==='网上确认')?'top':'more');
+  const isRealDate=/^\d{4}-\d{2}-\d{2}$/.test(k.d||'');
   openModal(`
+    <style>
+    .ek-pos{padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--paper2);color:var(--ink);font-size:13px;cursor:pointer;font-weight:600}
+    .ek-pos.on{background:var(--accent,#e85d4a);color:#fff;border-color:transparent}
+    </style>
     <h2>✎ 编辑关键节点</h2>
     <label class="f">名称</label>
     <input type="text" id="ekN" value="${k.n||''}">
-    <label class="f">日期</label>
-    <input type="date" id="ekD" value="${k.d||''}">
+    <label class="f">日期（标准日期可用选择框，也可直接填文字如"2026-09 中旬"）</label>
+    ${isRealDate
+      ?`<input type="date" id="ekD" value="${k.d||''}">`
+      :`<input type="text" id="ekD" value="${k.d||''}" placeholder="如：2026-09 中旬">`}
     <label class="f">显示备注（留空则用日期）</label>
     <input type="text" id="ekM" value="${k.m||''}" placeholder="如：2026-09 中旬">
     <label class="f">图标 emoji</label>
     <input type="text" id="ekI" value="${k.ico||'📌'}" style="max-width:80px">
-    <div class="row" style="margin-top:12px;justify-content:flex-end">
-      <button class="btn ghost" onclick="closeModal()">取消</button>
-      <button class="btn" onclick="saveKeyDate(${i})">保存</button>
+    <label class="f">显示位置</label>
+    <div class="row" id="ekPos" style="gap:6px">
+      <button type="button" class="ek-pos ${pos==='top'?'on':''}" data-v="top" onclick="ekPickPos(this)">⬆ 上面</button>
+      <button type="button" class="ek-pos ${pos==='more'?'on':''}" data-v="more" onclick="ekPickPos(this)">📥 更多里</button>
+      <button type="button" class="ek-pos ${pos==='hide'?'on':''}" data-v="hide" onclick="ekPickPos(this)">🙈 不显示</button>
+    </div>
+    <div class="row" style="margin-top:14px;justify-content:space-between">
+      <button class="btn ghost" style="color:#c0392b" onclick="closeModal();delKeyDate(${i})">🗑 删除</button>
+      <div class="row">
+        <button class="btn ghost" onclick="closeModal()">取消</button>
+        <button class="btn" onclick="saveKeyDate(${i})">保存</button>
+      </div>
     </div>`);
+}
+function ekPickPos(b){
+  document.querySelectorAll('#ekPos .ek-pos').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');
 }
 function saveKeyDate(i){
   const n=$('#ekN').value.trim(), dt=$('#ekD').value.trim(), m=$('#ekM').value.trim(), ic=$('#ekI').value.trim();
   if(!n||!dt){toast('名称和日期必填');return;}
+  const pb=document.querySelector('#ekPos .ek-pos.on');
+  const pos=pb?pb.dataset.v:'more';
   const arr=Array.isArray(state.keyDates)&&state.keyDates.length?state.keyDates:JSON.parse(JSON.stringify(KEY_DATES));
-  arr[i]={n,d:dt,m:m||dt,ico:ic||'📌'};
+  arr[i]=Object.assign({},arr[i],{n,d:dt,m:m||dt,ico:ic||'📌',pos:pos==='more'?undefined:pos});
   state.keyDates=arr; persist(); closeModal(); renderHome($('#main')); $('#side').innerHTML=renderSide(); toast('已保存');
+}
+function manageHidden(){
+  const arr=Array.isArray(state.keyDates)&&state.keyDates.length?state.keyDates:JSON.parse(JSON.stringify(KEY_DATES));
+  const hid=arr.map((k,i)=>({k,i})).filter(x=>x.k.pos==='hide');
+  if(!hid.length){ toast('没有已隐藏的节点'); return; }
+  openModal(`
+    <h2>🙈 已隐藏的节点</h2>
+    ${hid.map(({k,i})=>`<div class="spread" style="padding:9px 0;border-bottom:1px dashed var(--line)"><span style="font-size:14px">${k.ico||'📌'} <b>${k.n}</b> <span class="muted" style="font-size:11px">${k.m||k.d}</span></span><button class="btn sm" onclick="unhideKeyDate(${i})">恢复显示</button></div>`).join('')}
+    <div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">关闭</button></div>`);
+}
+function unhideKeyDate(i){
+  const arr=Array.isArray(state.keyDates)&&state.keyDates.length?state.keyDates:JSON.parse(JSON.stringify(KEY_DATES));
+  if(arr[i]){ arr[i]=Object.assign({},arr[i],{pos:undefined}); state.keyDates=arr; persist(); }
+  renderHome($('#main')); $('#side').innerHTML=renderSide();
+  const still=(state.keyDates||[]).filter(k=>k.pos==='hide').length;
+  if(still){ manageHidden(); } else { closeModal(); toast('已全部恢复显示'); }
 }
 function delKeyDate(i){
   if(!Array.isArray(state.keyDates)||!state.keyDates.length) state.keyDates=JSON.parse(JSON.stringify(KEY_DATES));
