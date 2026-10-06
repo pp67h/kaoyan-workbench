@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.10.5.10-->
+<!--APP_VER:2026.10.5.11-->
 <style>
 :root{
   --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
@@ -746,6 +746,7 @@ const DEFAULT_STATE = {
   monthDeleted:[],    // 月计划删除墓碑（同步用）
   examDate:'2026-12-21',
   keyDates:[],            // 用户自定义关键节点（数组为空时使用默认 8 条）
+  keyDatesDeleted:[],     // 关键节点删除墓碑（含 id 与 _t 删除时间，同步用）
   sched:[],               // 用户自定义作息（数组为空时使用默认 SCHEDULE）
   studyTime:{'英语':0,'政治':0,'专业课':0,'生活':0}, // 【兼容旧数据】每日累计学习时长（分钟），按科目
   studyToday:{date:'',英语:0,政治:0,专业课:0,生活:0}, // 当日各科计时秒数
@@ -1241,16 +1242,64 @@ function editPlan(i){
   if(!Array.isArray(state.progressPlan)||state.progressPlan.length!==3) state.progressPlan=cur.slice();
   state.progressPlan[i]=v.trim()||cur[i]; persist(); renderHome($('#main')); $('#side').innerHTML=renderSide(); toast('已更新');
 }
+/* ===== 关键节点：稳定 id + 删除墓碑（跨设备同步时删除不复活） ===== */
+function kdNewId(){ return 'kd_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function kdBaseKey(k){ return String((k&&k.n)||'').trim()+'|'+String((k&&k.d)||'').trim(); }
+// 旧数据无 id：按「名称|日期」确定性生成（同一节点在各设备算出同一个 id，用于对齐墓碑）
+function kdStableId(k){
+  var s=kdBaseKey(k), h=5381;
+  for(var i=0;i<s.length;i++){ h=((h<<5)+h+s.charCodeAt(i))>>>0; }
+  return 'kdh_'+h.toString(36);
+}
+function kdTouch(k){ if(k) k._t=Date.now(); return k; }
+// 获取节点数组（空则用默认 8 条的副本），并确保每条都有 id
+function kdArr(){
+  if(!Array.isArray(state.keyDates)||!state.keyDates.length) state.keyDates=JSON.parse(JSON.stringify(KEY_DATES));
+  state.keyDates.forEach(function(k){ if(k&&!k.id) k.id=kdStableId(k); });
+  return state.keyDates;
+}
+// 记录删除墓碑
+function kdTombstone(k){
+  if(!k) return;
+  state.keyDatesDeleted=Array.isArray(state.keyDatesDeleted)?state.keyDatesDeleted:[];
+  var id=k.id||kdStableId(k);
+  if(!state.keyDatesDeleted.some(function(x){ return x.id===id; })) state.keyDatesDeleted.push({id:id,_t:Date.now()});
+}
+// 关键节点合并：稳定 id 对齐 + _t 取新 + 删除墓碑（删除时间晚于修改时间才真正删掉）
+function keyDatesMerge(local, remote, localDel, remoteDel){
+  local=local||[]; remote=remote||[]; localDel=localDel||[]; remoteDel=remoteDel||[];
+  var delMap=new Map();
+  [].concat(localDel,remoteDel).forEach(function(d){ if(!d) return; var e=delMap.get(d.id); if(!e||(d._t||0)>(e._t||0)) delMap.set(d.id,d); });
+  var map=new Map(), order=[];
+  function take(arr){
+    arr.forEach(function(k){
+      if(!k) return;
+      var id=k.id||kdStableId(k);
+      var ex=map.get(id);
+      if(!ex){ map.set(id,k); order.push(id); }
+      else if((k._t||0)>=(ex._t||0)){ map.set(id,k); }
+    });
+  }
+  take(local); take(remote);
+  var alive=[], outDel=[];
+  order.forEach(function(id){
+    var k=map.get(id), dl=delMap.get(id);
+    // 删除时间晚于该节点最后修改时间 → 已被删除，继续留墓碑
+    if(dl && (dl._t||0) >= (k._t||0)){ outDel.push(dl); return; }
+    alive.push(k);
+  });
+  return {list:alive, deleted:outDel};
+}
 function addKeyDate(){
   const n=$('#kdN').value.trim(), dt=$('#kdD').value, i=$('#kdI').value.trim();
   if(!n||!dt){toast('请填写名称和日期');return;}
-  if(!Array.isArray(state.keyDates)||!state.keyDates.length) state.keyDates=JSON.parse(JSON.stringify(KEY_DATES));
-  state.keyDates.push({n,d:dt,m:dt,ico:i||'📌'});
+  kdArr().push(kdTouch({id:kdNewId(),n:n,d:dt,m:dt,ico:i||'📌'}));
   persist(); $('#kdN').value=''; $('#kdD').value=''; $('#kdI').value=''; renderHome($('#main')); $('#side').innerHTML=renderSide(); toast('已添加');
 }
 function editKeyDate(i){
-  if(!Array.isArray(state.keyDates)||!state.keyDates.length) state.keyDates=JSON.parse(JSON.stringify(KEY_DATES));
-  const k=state.keyDates[i];
+  const arr=kdArr();
+  const k=arr[i];
+  if(!k){ toast('节点不存在，请刷新'); return; }
   const pos=k.pos||((k.big || k.n==='正式报名' || k.n==='网上确认')?'top':'more');
   const isRealDate=/^\d{4}-\d{2}-\d{2}$/.test(k.d||'');
   openModal(`
@@ -1292,12 +1341,15 @@ function saveKeyDate(i){
   if(!n||!dt){toast('名称和日期必填');return;}
   const pb=document.querySelector('#ekPos .ek-pos.on');
   const pos=pb?pb.dataset.v:'more';
-  const arr=Array.isArray(state.keyDates)&&state.keyDates.length?state.keyDates:JSON.parse(JSON.stringify(KEY_DATES));
-  arr[i]=Object.assign({},arr[i],{n,d:dt,m:m||dt,ico:ic||'📌',pos:pos==='more'?undefined:pos});
+  const arr=kdArr();
+  const old=arr[i]||{};
+  // 重命名/改日期会让「名称|日期」变化 → id 保持不变（稳定 id），并把旧内容记为墓碑以免在别的设备复活
+  if((old.n!==n||old.d!==dt) && old.id) kdTombstone(old);
+  arr[i]=kdTouch(Object.assign({},old,{id:old.id||kdNewId(),n:n,d:dt,m:m||dt,ico:ic||'📌',pos:pos==='more'?undefined:pos}));
   state.keyDates=arr; persist(); closeModal(); renderHome($('#main')); $('#side').innerHTML=renderSide(); toast('已保存');
 }
 function manageHidden(){
-  const arr=Array.isArray(state.keyDates)&&state.keyDates.length?state.keyDates:JSON.parse(JSON.stringify(KEY_DATES));
+  const arr=kdArr();
   const hid=arr.map((k,i)=>({k,i})).filter(x=>x.k.pos==='hide');
   if(!hid.length){ toast('没有已隐藏的节点'); return; }
   openModal(`
@@ -1306,17 +1358,25 @@ function manageHidden(){
     <div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">关闭</button></div>`);
 }
 function unhideKeyDate(i){
-  const arr=Array.isArray(state.keyDates)&&state.keyDates.length?state.keyDates:JSON.parse(JSON.stringify(KEY_DATES));
-  if(arr[i]){ arr[i]=Object.assign({},arr[i],{pos:undefined}); state.keyDates=arr; persist(); }
+  const arr=kdArr();
+  if(arr[i]){ arr[i]=kdTouch(Object.assign({},arr[i],{pos:undefined})); state.keyDates=arr; persist(); }
   renderHome($('#main')); $('#side').innerHTML=renderSide();
   const still=(state.keyDates||[]).filter(k=>k.pos==='hide').length;
   if(still){ manageHidden(); } else { closeModal(); toast('已全部恢复显示'); }
 }
 function delKeyDate(i){
-  if(!Array.isArray(state.keyDates)||!state.keyDates.length) state.keyDates=JSON.parse(JSON.stringify(KEY_DATES));
-  state.keyDates.splice(i,1); persist(); renderHome($('#main')); $('#side').innerHTML=renderSide(); toast('已删除');
+  const arr=kdArr();
+  const k=arr[i];
+  if(!k){ toast('节点不存在，请刷新'); return; }
+  kdTombstone(k);                       // 先立墓碑，删除才能跨设备生效
+  arr.splice(i,1);
+  state.keyDates=arr; persist(); renderHome($('#main')); $('#side').innerHTML=renderSide(); toast('已删除');
 }
-function resetKeyDates(){ state.keyDates=[]; persist(); renderHome($('#main')); $('#side').innerHTML=renderSide(); toast('已恢复默认'); }
+function resetKeyDates(){
+  const arr=kdArr();
+  arr.forEach(k=>kdTombstone(k));       // 当前全部节点记墓碑，避免恢复默认后旧节点被云端复活
+  state.keyDates=[]; persist(); renderHome($('#main')); $('#side').innerHTML=renderSide(); toast('已恢复默认');
+}
 
 /* ---------- 月度规划日历 ---------- */
 function renderCal(main){
@@ -5410,7 +5470,8 @@ async function syncNow(forcePull){
     merged.monthPlan=monthPlanMerge(state.monthPlan||[],remoteState.monthPlan||[],state.monthDeleted||[],remoteState.monthDeleted||[]);
     merged.monthDeleted=Array.from(new Set([...(state.monthDeleted||[]),...(remoteState.monthDeleted||[])]));
     merged.weekPlan=arrayMergeByKey(state.weekPlan||[],remoteState.weekPlan||[],x=>(x.week||'')+'|'+(x.t||'').trim().toLowerCase());
-    merged.keyDates=arrayMergeByKey(state.keyDates||[],remoteState.keyDates||[],x=>(x.n||'')+'|'+(x.d||''));
+    { const _kd=keyDatesMerge(state.keyDates||[],remoteState.keyDates||[],state.keyDatesDeleted||[],remoteState.keyDatesDeleted||[]);
+      merged.keyDates=_kd.list; merged.keyDatesDeleted=_kd.deleted; }
     merged.mySent=arrayMergeByKey(state.mySent||[],remoteState.mySent||[],x=>(x.en||x.s||'').trim().toLowerCase());
     merged.mood=arrayMergeByKey(state.mood||[],remoteState.mood||[],x=>(x.date||'')+'|'+(x.mood||''));
     merged.progressPlan=((remoteState.progressPlan||[]).length>=(state.progressPlan||[]).length?remoteState.progressPlan:state.progressPlan)||[];
@@ -5783,7 +5844,8 @@ async function cloudRestore(){
     merged.monthPlan=monthPlanMerge(state.monthPlan||[],remoteState.monthPlan||[],state.monthDeleted||[],remoteState.monthDeleted||[]);
     merged.monthDeleted=Array.from(new Set([...(state.monthDeleted||[]),...(remoteState.monthDeleted||[])]));
     merged.weekPlan=arrayMergeByKey(state.weekPlan||[],remoteState.weekPlan||[],x=>(x.week||'')+'|'+(x.t||'').trim().toLowerCase());
-    merged.keyDates=arrayMergeByKey(state.keyDates||[],remoteState.keyDates||[],x=>(x.n||'')+'|'+(x.d||''));
+    { const _kd=keyDatesMerge(state.keyDates||[],remoteState.keyDates||[],state.keyDatesDeleted||[],remoteState.keyDatesDeleted||[]);
+      merged.keyDates=_kd.list; merged.keyDatesDeleted=_kd.deleted; }
     merged.mySent=arrayMergeByKey(state.mySent||[],remoteState.mySent||[],x=>(x.en||x.s||'').trim().toLowerCase());
     merged.mood=arrayMergeByKey(state.mood||[],remoteState.mood||[],x=>(x.date||'')+'|'+(x.mood||''));
     merged.progressPlan=((remoteState.progressPlan||[]).length>=(state.progressPlan||[]).length?remoteState.progressPlan:state.progressPlan)||[];
@@ -5982,7 +6044,9 @@ function mergeForCloud(local, remote){
   out.mySent=mergeArrayByKey(remote.mySent, local.mySent, x=>(x.s||x.text||JSON.stringify(x)));
   // 其余数组类字段：按内容去重合并（避免 deepMerge 整体覆盖导致丢数据）
   out.weekPlan=arrayMergeByKey(local.weekPlan||[],remote.weekPlan||[],x=>(x.week||'')+'|'+(x.t||'').trim().toLowerCase());
-  out.keyDates=arrayMergeByKey(local.keyDates||[],remote.keyDates||[],x=>(x.n||'')+'|'+(x.d||''));
+  const _kdm=keyDatesMerge(local.keyDates||[],remote.keyDates||[],local.keyDatesDeleted||[],remote.keyDatesDeleted||[]);
+  out.keyDates=_kdm.list;
+  out.keyDatesDeleted=_kdm.deleted;
   out.sched=arrayMergeByKey(local.sched||[],remote.sched||[],x=>(x.d||'')+'|'+(x.t||''));
   // 进度类：取两边最大值（进度只增不减）
   out.eng=deepMergeMax(local.eng||{},remote.eng||{});
