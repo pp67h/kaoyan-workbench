@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.10.5.8-->
+<!--APP_VER:2026.10.5.9-->
 <style>
 :root{
   --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
@@ -6347,8 +6347,8 @@ function renderPlanner(main){
     <div class="planner-config" style="margin-top:14px">
       <h3>⚙️ 选择计划模式</h3>
       <div style="display:flex;gap:8px;margin-bottom:10px">
-        <button type="button" id="plBtnTrad" class="btn sm" style="flex:1;padding:10px;${p.naming!=='year'?'background:linear-gradient(135deg,var(--c-plan),color-mix(in srgb,var(--c-plan) 68%,#fff));color:#fff;border:none':'background:var(--paper2);border:1px solid var(--line)'}" onclick="plSwitchMode('trad')">📋 传统模式<br><span style="font-size:11px;opacity:.8">L 1、L 2、L 3…</span></button>
-        <button type="button" id="plBtnYear" class="btn sm" style="flex:1;padding:10px;${p.naming==='year'?'background:linear-gradient(135deg,var(--c-plan),color-mix(in srgb,var(--c-plan) 68%,#fff));color:#fff;border:none':'background:var(--paper2);border:1px solid var(--line)'}" onclick="plSwitchMode('year')">📅 年份+Text模式<br><span style="font-size:11px;opacity:.8">2010年 text1、text2…</span></button>
+        <button type="button" id="plBtnTrad" class="btn sm" style="flex:1;padding:10px;${p.naming!=='year'?'background:linear-gradient(135deg,var(--c-plan),color-mix(in srgb,var(--c-plan) 68%,#fff));color:#fff;border:none':'background:var(--paper2);color:var(--ink);border:1px solid var(--line)'}" onclick="plSwitchMode('trad')">📋 传统模式<br><span style="font-size:11px;opacity:.8">L 1、L 2、L 3…</span></button>
+        <button type="button" id="plBtnYear" class="btn sm" style="flex:1;padding:10px;${p.naming==='year'?'background:linear-gradient(135deg,var(--c-plan),color-mix(in srgb,var(--c-plan) 68%,#fff));color:#fff;border:none':'background:var(--paper2);color:var(--ink);border:1px solid var(--line)'}" onclick="plSwitchMode('year')">📅 年份+Text模式<br><span style="font-size:11px;opacity:.8">2010年 text1、text2…</span></button>
       </div>
       <input type="hidden" id="plNamingHidden" value="${p.naming||'trad'}">
 
@@ -6585,11 +6585,11 @@ function plSwitchMode(mode){
   var btnT=$('#plBtnTrad'), btnY=$('#plBtnYear');
   if(btnT){
     if(mode==='trad'){ btnT.style.background='linear-gradient(135deg,var(--c-plan),color-mix(in srgb,var(--c-plan) 68%,#fff))'; btnT.style.color='#fff'; btnT.style.border='none'; }
-    else { btnT.style.background='var(--paper2)'; btnT.style.color=''; btnT.style.border='1px solid var(--line)'; }
+    else { btnT.style.background='var(--paper2)'; btnT.style.color='var(--ink)'; btnT.style.border='1px solid var(--line)'; }
   }
   if(btnY){
     if(mode==='year'){ btnY.style.background='linear-gradient(135deg,var(--c-plan),color-mix(in srgb,var(--c-plan) 68%,#fff))'; btnY.style.color='#fff'; btnY.style.border='none'; }
-    else { btnY.style.background='var(--paper2)'; btnY.style.color=''; btnY.style.border='1px solid var(--line)'; }
+    else { btnY.style.background='var(--paper2)'; btnY.style.color='var(--ink)'; btnY.style.border='1px solid var(--line)'; }
   }
   // 切换显示对应的参数区
   var tradF=$('#tradFields'), yearF=$('#yearFields');
