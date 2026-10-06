@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.10.5.7-->
+<!--APP_VER:2026.10.5.8-->
 <style>
 :root{
   --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
@@ -40,7 +40,7 @@
   --c-plan:#E08A3C;   /* 背诵计划 · 柿子橙（秋色主色） */
   --c-plan2:#E09A3C;  /* 背诵计划 · 金橙（次色：标题/数字） */
   --c-plan3:#D98A2B;  /* 背诵计划 · 姜黄（辅色：标签/勾选） */
-  --c-exam:#79C3E6;   /* 真题得分 · 天空蓝 */
+  --c-exam:#4FA89B;   /* 真题得分 · 跟随英语页青碧绿 */
   --r:18px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -485,9 +485,11 @@ body{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 .ck-photo:hover .del{display:block}
 .ck-photo .cap{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(transparent,rgba(0,0,0,.55));color:#fff;font-size:10px;padding:6px 8px 5px}
 /* 真题得分页专属样式 */
-.exam-hero{background:linear-gradient(135deg,var(--c-exam),color-mix(in srgb,var(--c-exam) 68%,#fff));color:#fff;border-radius:18px;padding:16px 18px;box-shadow:0 6px 20px rgba(61,126,166,.25);margin-bottom:12px}
+.exam-hero{background:linear-gradient(135deg,var(--c-exam),color-mix(in srgb,var(--c-exam) 68%,#fff));color:#fff;border-radius:18px;padding:16px 18px;box-shadow:0 6px 20px rgba(79,168,155,.28);margin-bottom:12px}
 .exchip{display:inline-flex;align-items:center;justify-content:center;padding:6px 12px;border-radius:12px;border:1px solid var(--line);background:var(--paper2);font-size:13px;cursor:pointer;user-select:none;white-space:nowrap}
 .exchip.on{background:linear-gradient(135deg,var(--c-exam),color-mix(in srgb,var(--c-exam) 68%,#fff));color:#fff;border-color:transparent;font-weight:600}
+.exam-hero .exchip:not(.on){background:rgba(255,255,255,.93);color:#2e6f61;border-color:transparent;font-weight:600}
+.exam-hero .exchip.on{box-shadow:0 0 0 2px rgba(255,255,255,.55)}
 .bar.exbar>i{background:linear-gradient(135deg,var(--c-exam),color-mix(in srgb,var(--c-exam) 68%,#fff))}
 /* 倒计时(home)与目标院校(school)保持原纯色，不参与渐变 */
 body[data-mod="home"] .btn,body[data-mod="school"] .btn{background:var(--accent,#e85d4a)}
@@ -1186,7 +1188,7 @@ function renderHome(main){
     <div class="kd-grid">${mainCells}</div>
     ${otherNodes.length?`
     <div style="margin-top:10px;text-align:center">
-      <button class="btn ghost sm" onclick="document.getElementById('moreNodes').classList.toggle('show');this.textContent=document.getElementById('moreNodes').classList.contains('show')?'收起更多 ▲':'查看更多 ▼'">查看更多 ▼</button>
+      <button class="btn sm" onclick="document.getElementById('moreNodes').classList.toggle('show');this.textContent=document.getElementById('moreNodes').classList.contains('show')?'收起更多 ▲':'查看更多 ▼'">查看更多 ▼</button>
     </div>
     <div class="more-nodes" id="moreNodes">
       <div class="kd-grid">${otherCells}</div>
@@ -1197,7 +1199,7 @@ function renderHome(main){
       <input type="text" id="kdI" placeholder="emoji" style="max-width:60px">
       <button class="btn sm" onclick="addKeyDate()">添加</button>
     </div>
-    <button class="btn ghost sm" style="margin-top:6px" onclick="resetKeyDates()">恢复默认节点</button>
+    <button class="btn sm" style="margin-top:6px" onclick="resetKeyDates()">恢复默认节点</button>
     <hr>
     <div class="spread"><span class="muted">今日鼓励</span><span class="pill">第${(dayIdx%ENCOURAGE.length)+1}句</span></div>
     <p style="margin:6px 0;font-size:15px">"${enc}"</p>
