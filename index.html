@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.10.13.1-->
+<!--APP_VER:2026.10.13.2-->
 <style>
 :root{
   --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
@@ -747,7 +747,13 @@ const DEFAULT_STATE = {
   examDate:'2026-12-21',
   keyDates:[],            // 用户自定义关键节点（数组为空时使用默认 8 条）
   keyDatesDeleted:[],     // 关键节点删除墓碑（含 id 与 _t 删除时间，同步用）
-  progCustom:[],          // 进度概览自定义条目 [{id,n,cur,tot}]
+  progCustom:[],          // 进度概览自定义条目 [{id,gid,n,rounds:[{cur,tot}]}]
+  progGroups:[],          // 进度概览自定义分组 [{id,n}]
+  progItemNames:{},       // 预置条目改名覆盖 {id:名}
+  progGroupNames:{},      // 分组改名覆盖 {gid:名}
+  progRounds:{},          // 预置条目轮数覆盖 {id:1..3}
+  progTotOv:{},           // 每轮总量覆盖 {id#轮:tot}
+  progHidden:[],          // 隐藏（软删除）的条目/分组 id
   sched:[],               // 用户自定义作息（数组为空时使用默认 SCHEDULE）
   studyTime:{'英语':0,'政治':0,'专业课':0,'生活':0}, // 【兼容旧数据】每日累计学习时长（分钟），按科目
   studyToday:{date:'',英语:0,政治:0,专业课:0,生活:0}, // 当日各科计时秒数
@@ -1615,144 +1621,244 @@ function syncMonthPlanAfterProgChange(){
   });
   return changed;
 }
-function progStepEng(d){ const o=state.eng['阅读']; o.y1=Math.max(0,Math.min(o.total,o.y1+d)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-function progApplyEng(){ const o=state.eng['阅读']; o.total=Math.max(1,parseInt($('#progEngTot').value)||0); o.y1=Math.max(0,Math.min(o.total,parseInt($('#progEngCur').value)||0)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-function progStepPol(d){ state.pol.q1000=Math.max(0,Math.min(state.pol.q1000Total||30,state.pol.q1000+d)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-function progApplyPol(){ state.pol.q1000=Math.max(0,Math.min(state.pol.q1000Total||30,parseInt($('#progPol').value)||0)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-function progStepVocab(d){ const v=state.vocab; v.y1=Math.max(0,Math.min(v.total,v.y1+d)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-function progApplyVocab(){ const v=state.vocab; v.total=Math.max(1,parseInt($('#progVocTot').value)||0); v.y1=Math.max(0,Math.min(v.total,parseInt($('#progVocCur').value)||0)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-/* 进度概览：英语四卡（一刷/二刷） */
-function progEngSet(card,key,val){ const o=state.eng[card]; if(!o)return; o[key]=Math.max(0,Math.min(o.total,parseInt(val)||0)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-function progEngTot(card,val){ const o=state.eng[card]; if(!o)return; o.total=Math.max(1,parseInt(val)||0); o.y1=Math.min(o.y1,o.total); o.y2=Math.min(o.y2,o.total); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-function progVocabSet(k,val){ const w=state.vocab; if(!w)return; w[k]=Math.max(0,Math.min(w.total,parseInt(val)||0)); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-function progVocabTot(val){ const w=state.vocab; if(!w)return; w.total=Math.max(1,parseInt(val)||1); ['y1','y2','y3'].forEach(function(k){ w[k]=Math.min(w[k],w.total); }); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-/* 进度概览：政治 1000题/肖八/肖四 */
-function progPolSet(k,val){ const max=(k==='q1000'||k==='q1000y2')?(state.pol.q1000Total||30):k==='x8'?8:4; state.pol[k]=Math.max(0,Math.min(max,parseInt(val)||0)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-function progPolStep(k,n){ const max=(k==='q1000'||k==='q1000y2')?(state.pol.q1000Total||30):k==='x8'?8:4; state.pol[k]=Math.max(0,Math.min(max,state.pol[k]+n)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-function progPolTot(val){ state.pol.q1000Total=Math.max(1,parseInt(val)||30); state.pol.q1000=Math.min(state.pol.q1000,state.pol.q1000Total); state.pol.q1000y2=Math.min(state.pol.q1000y2||0,state.pol.q1000Total); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-/* 进度概览：专业课（心理）页进度 */
-function progKnowSet(subj,val){ const d=state.know.pages[state.know.round][subj]; const mx=d.total>0?d.total:Infinity; d.cur=Math.max(0,Math.min(mx,parseInt(val)||0)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-function progKnowTot(subj,val){ const d=state.know.pages[state.know.round][subj]; d.total=Math.max(0,parseInt(val)||0); d.cur=Math.min(d.cur,d.total); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-/* 进度概览：自定义条目（可增删改，云同步按 id 合并） */
-function progCustomArr(){ if(!Array.isArray(state.progCustom)) state.progCustom=[]; return state.progCustom; }
-function progCustomAdd(){ progCustomArr().push({id:uid(),n:'新条目',cur:0,tot:100}); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
-function progCustomDel(i){ progCustomArr().splice(i,1); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); toast('已删除'); }
-function progCustomSet(k,i,val){
-  const it=progCustomArr()[i]; if(!it) return;
-  if(k==='n'){ it.n=(val||'').trim()||'条目'; }
-  else if(k==='tot'){ it.tot=Math.max(1,parseInt(val)||1); it.cur=Math.min(it.cur,it.tot); }
-  else { it.cur=Math.max(0,Math.min(it.tot,parseInt(val)||0)); }
+/* ===== 进度概览：分组+条目全可管理（组/条目可增删改，条目支持1~3轮，删除仅隐藏） ===== */
+const PROG_GROUP_DEFS=[
+  {id:'g_word',n:'🔤 单词'},
+  {id:'g_eng',n:'🇬🇧 英语'},
+  {id:'g_pol',n:'🇨🇳 政治'},
+  {id:'g_know',n:'📚 专业课'},
+];
+function progLayout(){
+  if(!Array.isArray(state.progCustom)) state.progCustom=[];
+  // 旧结构迁移：{cur,tot} → {rounds:[{cur,tot}]}
+  state.progCustom.forEach(it=>{ if(it&&!it.rounds&&it.tot!==undefined){ it.rounds=[{cur:it.cur||0,tot:it.tot||100}]; delete it.cur; delete it.tot; } });
+  if(!Array.isArray(state.progGroups)) state.progGroups=[];
+  if(typeof state.progItemNames!=='object'||!state.progItemNames) state.progItemNames={};
+  if(typeof state.progGroupNames!=='object'||!state.progGroupNames) state.progGroupNames={};
+  if(typeof state.progRounds!=='object'||!state.progRounds) state.progRounds={};
+  if(typeof state.progTotOv!=='object'||!state.progTotOv) state.progTotOv={};
+  if(!Array.isArray(state.progHidden)) state.progHidden=[];
+}
+/* 预置条目：read() 从真实数据读每轮 cur/tot；write(r,cur,tot) 写回（保持其他页面联动） */
+const PROG_PRESETS=[
+  {id:'pv_word',gid:'g_word',n:'单词',defR:3,maxR:3,
+   read:()=>{const w=state.vocab||(state.vocab={total:6023,y1:0,y2:0,y3:0});const t=w.total||1;
+     return [{cur:w.y1||0,tot:t},{cur:w.y2||0,tot:t},{cur:w.y3||0,tot:t}];},
+   write:(r,cur,tot)=>{const w=state.vocab;w.total=Math.max(1,tot);if(r===0)w.y1=cur;else if(r===1)w.y2=cur;else w.y3=cur;}},
+  {id:'pe_完形',gid:'g_eng',n:'完形',defR:2,maxR:3,engC:'完形'},
+  {id:'pe_阅读',gid:'g_eng',n:'阅读',defR:2,maxR:3,engC:'阅读'},
+  {id:'pe_新题型',gid:'g_eng',n:'新题型',defR:2,maxR:3,engC:'新题型'},
+  {id:'pe_作文',gid:'g_eng',n:'作文',defR:2,maxR:3,engC:'作文'},
+  {id:'pp_1000',gid:'g_pol',n:'1000题',defR:2,maxR:3,
+   read:()=>{const p=state.pol;const t=p.q1000Total||30;
+     return [{cur:p.q1000||0,tot:t},{cur:p.q1000y2||0,tot:t},{cur:p.q1000y3||0,tot:t}];},
+   write:(r,cur,tot)=>{const p=state.pol;p.q1000Total=Math.max(1,tot);if(r===0)p.q1000=cur;else if(r===1)p.q1000y2=cur;else p.q1000y3=cur;syncMonthPlanAfterProgChange();}},
+  {id:'pp_x8',gid:'g_pol',n:'肖八',defR:1,maxR:1,
+   read:()=>[{cur:state.pol.x8||0,tot:8}],write:(r,cur)=>{state.pol.x8=Math.max(0,Math.min(8,cur));syncMonthPlanAfterProgChange();}},
+  {id:'pp_x4',gid:'g_pol',n:'肖四',defR:1,maxR:1,
+   read:()=>[{cur:state.pol.x4||0,tot:4}],write:(r,cur)=>{state.pol.x4=Math.max(0,Math.min(4,cur));syncMonthPlanAfterProgChange();}},
+  {id:'pk_发展心理学',gid:'g_know',n:'发展心理学',defR:1,maxR:1,knowC:'发展心理学'},
+  {id:'pk_心理学导论',gid:'g_know',n:'心理学导论',defR:1,maxR:1,knowC:'心理学导论'},
+  {id:'pk_研究方法',gid:'g_know',n:'心理与教育研究方法',defR:1,maxR:1,knowC:'心理与教育研究方法'},
+];
+function _engPresetRead(c){const o=(state.eng||{})[c]||{y1:0,y2:0,y3:0,total:0};const t=o.total||0;
+  return [{cur:o.y1||0,tot:t},{cur:o.y2||0,tot:t},{cur:o.y3||0,tot:t}];}
+function _engPresetWrite(c,r,cur,tot){const o=state.eng||(state.eng={});if(!o[c])o[c]={y1:0,y2:0,y3:0,total:0};
+  o[c].total=Math.max(1,tot);o[c]['y'+(r+1)]=cur;syncMonthPlanAfterProgChange();}
+PROG_PRESETS.forEach(p=>{ if(p.engC){ p.read=()=>_engPresetRead(p.engC); p.write=(r,cur,tot)=>_engPresetWrite(p.engC,r,cur,tot); } });
+function _knowPresetRead(c){const d=state.know.pages[state.know.round][c]||{cur:0,total:0};return [{cur:d.cur||0,tot:d.total||0}];}
+function _knowPresetWrite(c,r,cur,tot){const d=state.know.pages[state.know.round][c];d.total=Math.max(0,tot);d.cur=Math.max(0,Math.min(d.total,cur));syncMonthPlanAfterProgChange();}
+PROG_PRESETS.forEach(p=>{ if(p.knowC){ p.read=()=>_knowPresetRead(p.knowC); p.write=(r,cur,tot)=>_knowPresetWrite(p.knowC,r,cur,tot); } });
+/* 组列表：预置+自定义，应用改名 */
+function progGroupsAll(){
+  progLayout();
+  const defs=PROG_GROUP_DEFS.map(g=>({id:g.id,n:state.progGroupNames[g.id]||g.n,preset:true}));
+  const custom=state.progGroups.map(g=>({id:g.id,n:state.progGroupNames[g.id]||g.n,preset:false}));
+  return defs.concat(custom).filter(g=>!state.progHidden.includes(g.id));
+}
+/* 某组的条目：预置+自定义，应用改名/轮数/总量覆盖 */
+function progItemsOf(gid){
+  const out=[];
+  PROG_PRESETS.filter(p=>p.gid===gid).forEach(p=>{
+    const rounds=p.read().map((x,i)=>({cur:x.cur,tot:(state.progTotOv[p.id+'#'+i]!==undefined?state.progTotOv[p.id+'#'+i]:x.tot)}));
+    out.push({id:p.id,gid:gid,n:state.progItemNames[p.id]||p.n,rounds:rounds,defR:p.defR,maxR:p.maxR,preset:true});
+  });
+  state.progCustom.filter(it=>it.gid===gid).forEach(it=>{
+    out.push({id:it.id,gid:gid,n:it.n,rounds:it.rounds,defR:it.rounds.length,maxR:3,preset:false});
+  });
+  return out.filter(it=>!state.progHidden.includes(it.id));
+}
+function progRoundCnt(it){ // 当前轮数
+  const ov=state.progRounds[it.id];
+  return Math.max(1,Math.min(it.maxR,ov||it.defR||1));
+}
+const PROG_RLABEL=['一轮','二轮','三轮'];
+/* 改某轮 cur/tot（预置写回真实数据+总量覆盖；自定义直接改） */
+function progSetVal(id,r,cur,tot){
+  cur=Math.max(0,parseInt(cur)||0); tot=Math.max(1,parseInt(tot)||1); cur=Math.min(cur,tot);
+  const ps=PROG_PRESETS.find(p=>p.id===id);
+  if(ps){ ps.write(r,cur,tot); state.progTotOv[id+'#'+r]=tot; }
+  else { const it=state.progCustom.find(x=>x.id===id); if(it){ while(it.rounds.length<=r) it.rounds.push({cur:0,tot:100}); it.rounds[r]={cur:cur,tot:tot}; } }
   persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide();
 }
+function progAddRound(id){ // 增加一轮
+  const ps=PROG_PRESETS.find(p=>p.id===id);
+  let curR,maxR;
+  if(ps){ curR=progRoundCnt({id:id,defR:ps.defR,maxR:ps.maxR}); maxR=ps.maxR; state.progRounds[id]=Math.min(maxR,curR+1); }
+  else { const it=state.progCustom.find(x=>x.id===id); if(!it)return; curR=it.rounds.length; maxR=3;
+         if(curR<3) it.rounds.push({cur:0,tot:it.rounds[curR-1].tot}); }
+  persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide();
+}
+function progDelRound(id){ // 减少一轮
+  const ps=PROG_PRESETS.find(p=>p.id===id);
+  if(ps){ const cur=progRoundCnt({id:id,defR:ps.defR,maxR:ps.maxR}); if(cur>1) state.progRounds[id]=cur-1; }
+  else { const it=state.progCustom.find(x=>x.id===id); if(it&&it.rounds.length>1) it.rounds.pop(); }
+  persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide();
+}
+/* 改名（预置存覆盖，自定义直接改） */
+function progItemRename(id){
+  const ps=PROG_PRESETS.find(p=>p.id===id);
+  const cur=ps?(state.progItemNames[id]||ps.n):(state.progCustom.find(x=>x.id===id)||{}).n||'';
+  openModal(`<h2>✎ 重命名</h2><input type="text" id="prnV" value="${escAttr(cur)}" style="width:100%">
+    <div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">取消</button>
+    <button class="btn" onclick="progItemRenameSave('${id}')">保存</button></div>`);
+}
+function progItemRenameSave(id){
+  const v=($('#prnV')||{}).value||'';
+  if(PROG_PRESETS.find(p=>p.id===id)) state.progItemNames[id]=v.trim()||undefined;
+  else { const it=state.progCustom.find(x=>x.id===id); if(it) it.n=v.trim()||it.n; }
+  persist(); closeModal(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); toast('已改名');
+}
+/* 删除=隐藏；恢复默认=清隐藏与覆盖 */
+function progHide(id){ if(!state.progHidden.includes(id)) state.progHidden.push(id); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); toast('已从概览隐藏（数据保留，可恢复默认找回）'); }
+function progGroupRename(gid){
+  const g=progGroupsAll().find(x=>x.id===gid); if(!g)return;
+  openModal(`<h2>✎ 重命名分组</h2><input type="text" id="prnV" value="${escAttr(g.n)}" style="width:100%">
+    <div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">取消</button>
+    <button class="btn" onclick="progGroupRenameSave('${gid}')">保存</button></div>`);
+}
+function progGroupRenameSave(gid){ state.progGroupNames[gid]=($('#prnV')||{value:''}).value.trim()||undefined; persist(); closeModal(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
+function progGroupDel(gid){
+  const items=progItemsOf(gid);
+  openModal(`<h2>🗑 删除分组</h2><p style="font-size:13px">该组（含 ${items.length} 个条目）将从概览隐藏，<b>真实进度数据保留</b>，可随时「恢复默认」找回。</p>
+    <div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">取消</button>
+    <button class="btn" style="background:#c0392b" onclick="progGroupDelOk('${gid}')">删除</button></div>`);
+}
+function progGroupDelOk(gid){
+  if(!state.progHidden.includes(gid)) state.progHidden.push(gid);
+  state.progGroups=state.progGroups.filter(g=>g.id!==gid);
+  delete state.progGroupNames[gid];
+  persist(); closeModal(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); toast('分组已隐藏');
+}
+function progGroupAdd(){
+  openModal(`<h2>＋ 新增分组</h2><input type="text" id="prnV" placeholder="组名，如：作文素材" style="width:100%">
+    <div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">取消</button>
+    <button class="btn" onclick="progGroupAddSave()">创建</button></div>`);
+}
+function progGroupAddSave(){
+  const v=($('#prnV')||{value:''}).value.trim(); if(!v){toast('请填组名');return;}
+  state.progGroups.push({id:'pg_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),n:v});
+  persist(); closeModal(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); toast('分组已创建');
+}
+/* 新增条目：弹窗选组 + 名称 + 轮数 + 每轮总量 */
+let _progAddGid='', _progAddR=1;
+function progAddItem(gid){
+  const gs=progGroupsAll();
+  if(!gs.length){ toast('请先创建一个分组'); return; }
+  _progAddGid=gs.find(g=>g.id===gid)?gid:gs[0].id; _progAddR=1;
+  openModal(`<style>
+    .pga-chip{padding:7px 12px;border-radius:10px;border:1px solid var(--line);background:var(--paper2);color:var(--ink);font-size:13px;cursor:pointer;font-weight:600}
+    .pga-chip.on{background:var(--accent,#e85d4a);color:#fff;border-color:transparent}
+    </style>
+    <h2>＋ 新增条目</h2>
+    <label class="f">放到哪个分组</label>
+    <div class="row" id="pgaG" style="gap:6px;flex-wrap:wrap">${gs.map(g=>'<button type="button" class="pga-chip'+(g.id===_progAddGid?' on':'')+'" data-g="'+g.id+'" onclick="pgaPickG(this)">'+escAttr(g.n)+'</button>').join('')}</div>
+    <label class="f">条目名称</label>
+    <input type="text" id="pgaN" placeholder="如：肖秀荣带背、作文模板" style="width:100%">
+    <label class="f">轮数（每轮总量可以不同）</label>
+    <div class="row" id="pgaR" style="gap:6px">
+      <button type="button" class="pga-chip on" data-r="1" onclick="pgaPickR(this)">1 轮</button>
+      <button type="button" class="pga-chip" data-r="2" onclick="pgaPickR(this)">2 轮</button>
+      <button type="button" class="pga-chip" data-r="3" onclick="pgaPickR(this)">3 轮</button>
+    </div>
+    <div id="pgaTots" style="margin-top:6px"></div>
+    <div class="row" style="margin-top:14px;justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">取消</button>
+    <button class="btn" onclick="progAddItemSave()">创建</button></div>`);
+  pgaRenderTots();
+}
+function pgaPickG(b){ _progAddGid=b.dataset.g; document.querySelectorAll('#pgaG .pga-chip').forEach(x=>x.classList.toggle('on',x===b)); }
+function pgaPickR(b){ _progAddR=+b.dataset.r; document.querySelectorAll('#pgaR .pga-chip').forEach(x=>x.classList.toggle('on',x===b)); pgaRenderTots(); }
+function pgaRenderTots(){
+  const box=document.getElementById('pgaTots'); if(!box) return;
+  let h='';
+  for(let i=0;i<_progAddR;i++){ h+='<div class="row" style="margin-top:4px;align-items:center"><span class="muted" style="font-size:12px;width:36px">'+PROG_RLABEL[i]+'</span><span class="muted" style="font-size:12px">总量</span><input type="number" min="1" id="pgaT'+i+'" value="100" style="width:80px;padding:5px 8px;border:1px solid var(--line);border-radius:8px"></div>'; }
+  h+='<div class="muted" style="font-size:11px;margin-top:4px">每轮总量创建后都能随时改，一轮二轮可以不同</div>';
+  box.innerHTML=h;
+}
+function progAddItemSave(){
+  const n=($('#pgaN')||{value:''}).value.trim(); if(!n){toast('请填条目名称');return;}
+  const rounds=[];
+  for(let i=0;i<_progAddR;i++){ const t=Math.max(1,parseInt((document.getElementById('pgaT'+i)||{}).value)||100); rounds.push({cur:0,tot:t}); }
+  state.progCustom.push({id:'pc_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),gid:_progAddGid,n:n,rounds:rounds});
+  persist(); closeModal(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); toast('已添加到所选分组');
+}
+/* 恢复默认：清隐藏/改名/轮数/总量覆盖（自定义组和条目保留） */
+function progResetAll(){
+  state.progHidden=[]; state.progItemNames={}; state.progRounds={}; state.progTotOv={}; state.progGroupNames={};
+  persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); toast('预置条目已全部恢复显示');
+}
+/* 自定义条目删除（真删） */
+function progCustomDel(id){ state.progCustom=state.progCustom.filter(x=>x.id!==id); if(state.progHidden.includes(id)) state.progHidden=state.progHidden.filter(x=>x!==id); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); toast('已删除'); }
 function renderProgress(main){
-  const pol=state.pol; const v=state.vocab; const e=state.eng;
-  const engCards=['完形','阅读','新题型','作文'];
-  const KS=['发展心理学','心理学导论','心理与教育研究方法'];
-  const r=state.know.round;
-  const vw=state.vocab||(state.vocab={total:6023,y1:4289,y2:0,y3:0});
-  if(vw.cur!==undefined){ vw.y1=vw.cur; vw.total=vw.total||6023; delete vw.cur; persist(); }
-  const vocabRows=(function(){
-    const vv=state.vocab;
-    const bars=[['一刷','y1'],['二刷','y2'],['三刷','y3']].map(function(it){
-      const pct=progPct(vv[it[1]],vv.total);
-      return '<div class="prog-row"><div class="spread"><b>'+it[0]+'</b><span class="muted">'+vv[it[1]]+'/'+vv.total+'（'+pct+'%）</span></div><div class="bar"><i style="width:'+pct+'%"></i></div></div>';
+  progLayout();
+  const groups=progGroupsAll();
+  const secBtns=(g)=>'<span style="display:flex;align-items:center;gap:6px">'
+    +'<button class="btn ghost xs" title="重命名分组" onclick="progGroupRename(\''+g.id+'\')">✎</button>'
+    +'<button class="btn ghost xs" title="隐藏分组" style="color:#c0392b" onclick="progGroupDel(\''+g.id+'\')">×</button>'
+    +'<button class="btn ghost xs" title="往这组加条目" onclick="progAddItem(\''+g.id+'\')">＋</button></span>';
+  const groupHtml=groups.map(g=>{
+    const items=progItemsOf(g.id);
+    const rows=items.map(it=>{
+      const R=progRoundCnt(it);
+      const idA=escAttr(it.id); const nm=escAttr(it.n);
+      const roundBlocks=[];
+      for(let r=0;r<R;r++){
+        const rd=it.rounds[r]||{cur:0,tot:100};
+        const pct=progPct(rd.cur,rd.tot);
+        roundBlocks.push(
+          '<div class="spread"><b style="font-size:12px;color:var(--muted,#888)">'+PROG_RLABEL[r]+'</b><span class="muted" style="font-size:12px">'+rd.cur+'/'+rd.tot+'（'+pct+'%）</span></div>'
+          +'<div class="bar"><i style="width:'+pct+'%"></i></div>'
+          +'<div class="row" style="margin-top:4px;gap:6px;align-items:center">'
+          +'<input type="number" min="0" value="'+rd.cur+'" onchange="progSetVal(\''+idA+'\','+r+',this.value,this.parentElement.querySelector(\'.ptot\').value)" style="width:54px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">'
+          +'<span class="muted" style="font-size:12px">/</span>'
+          +'<input type="number" class="ptot" min="1" value="'+rd.tot+'" onchange="progSetVal(\''+idA+'\','+r+',this.parentElement.querySelector(\'input[type=number]\').value,this.value)" style="width:54px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">'
+          +'</div>');
+      }
+      const roundCtl=(it.maxR>1)?'<div class="row" style="margin-top:5px;gap:6px;align-items:center">'
+        +(R<it.maxR?'<button class="btn ghost xs" onclick="progAddRound(\''+idA+'\')">＋ 加一轮</button>':'')
+        +(R>1?'<button class="btn ghost xs" onclick="progDelRound(\''+idA+'\')">－ 去一轮</button>':'')
+        +'</div>':'';
+      const delFn=it.preset?'progHide':'progCustomDel';
+      return '<div class="prog-row">'
+        +'<div class="spread"><b>'+nm+'</b><span style="display:flex;align-items:center;gap:6px">'
+        +'<button class="btn ghost xs" title="重命名" onclick="progItemRename(\''+idA+'\')">✎</button>'
+        +'<button class="btn ghost xs" title="隐藏（数据保留）" style="color:#c0392b" onclick="'+delFn+'(\''+idA+'\')">×</button></span></div>'
+        +roundBlocks.join('')
+        +roundCtl
+        +'</div>';
     }).join('');
-    return '<div class="prog-row">'
-      +'<div class="spread"><b>🔤 单词</b><span class="muted">共 '+vv.total+' 词</span></div>'
-      +bars
-      +'<div class="row" style="margin-top:6px;gap:6px;align-items:center;flex-wrap:wrap">'
-      +'<span class="muted" style="font-size:12px">一刷</span><input type="number" min="0" value="'+vv.y1+'" onchange="progVocabSet(\'y1\',this.value)" style="width:56px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">'
-      +'<span class="muted" style="font-size:12px">二刷</span><input type="number" min="0" value="'+vv.y2+'" onchange="progVocabSet(\'y2\',this.value)" style="width:56px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">'
-      +'<span class="muted" style="font-size:12px">三刷</span><input type="number" min="0" value="'+vv.y3+'" onchange="progVocabSet(\'y3\',this.value)" style="width:56px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">'
-      +'<span class="muted">/ 总</span><input type="number" min="1" value="'+vv.total+'" onchange="progVocabTot(this.value)" style="width:56px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">'
-      +'</div></div>';
-  })();
-  const stat=(label,cur,tot)=>`<div class="prog-row">
-    <div class="spread"><b>${label}</b><span class="muted">${Math.max(0,Math.min(cur,tot))}/${tot}（${progPct(cur,tot)}%）</span></div>
-    <div class="bar"><i style="width:${progPct(cur,tot)}%"></i></div></div>`;
-  const engRows=engCards.map(c=>{ const o=e[c]||{y1:0,y2:0,total:0};
-    return `<div class="prog-row">
-      <div class="spread"><b>🇬🇧 ${c}</b><span class="muted">一刷 ${o.y1}/${o.total} · 二刷 ${o.y2}/${o.total}</span></div>
-      <div class="bar"><i style="width:${progPct(o.y1,o.total)}%"></i></div>
-      <div class="bar" style="margin-top:4px;--accent:var(--c-prog)"><i style="width:${progPct(o.y2,o.total)}%"></i></div>
-      <div class="row" style="margin-top:6px;gap:6px;align-items:center;flex-wrap:wrap">
-        <span class="muted" style="font-size:12px">一刷</span>
-        <input type="number" min="0" value="${o.y1}" onchange="progEngSet('${c}','y1',this.value)" style="width:52px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">
-        <span class="muted" style="font-size:12px">二刷</span>
-        <input type="number" min="0" value="${o.y2}" onchange="progEngSet('${c}','y2',this.value)" style="width:52px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">
-        <span class="muted">/ 总</span>
-        <input type="number" min="1" value="${o.total}" onchange="progEngTot('${c}',this.value)" style="width:52px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">
-      </div>
-    </div>`; }).join('');
-  const knowRows=KS.map(subj=>{ const d=state.know.pages[r][subj];
-    return `<div class="prog-row">
-      <div class="spread"><b>📚 ${subj}</b><span class="muted">已背 ${d.cur}/${d.total} 页（${progPct(d.cur,d.total)}%）</span></div>
-      <div class="bar"><i style="width:${progPct(d.cur,d.total)}%"></i></div>
-      <div class="row" style="margin-top:6px;gap:6px;align-items:center">
-        <span class="muted" style="font-size:12px">已背</span>
-        <input type="number" min="0" value="${d.cur}" onchange="progKnowSet('${subj}',this.value)" style="width:54px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">
-        <span class="muted">/ 总</span>
-        <input type="number" min="0" value="${d.total}" onchange="progKnowTot('${subj}',this.value)" style="width:54px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">
-        <span class="muted" style="font-size:12px">页</span>
-      </div>
-    </div>`; }).join('');
-  const customRows=progCustomArr().map((it,i)=>{
-    const pct=progPct(it.cur,it.tot);
-    const nm=escAttr(it.n);
-    return '<div class="prog-row">'
-      +'<div class="spread"><b>✏️ '+nm+'</b><span style="display:flex;align-items:center;gap:8px"><span class="muted">'+it.cur+'/'+it.tot+'（'+pct+'%）</span>'
-      +'<button class="btn ghost xs" style="padding:1px 8px;font-size:12px;color:#c0392b" onclick="progCustomDel('+i+')">×</button></span></div>'
-      +'<div class="bar"><i style="width:'+pct+'%"></i></div>'
-      +'<div class="row" style="margin-top:6px;gap:6px;align-items:center;flex-wrap:wrap">'
-      +'<input type="text" value="'+nm+'" onchange="progCustomSet(\'n\','+i+',this.value)" style="flex:1;min-width:90px;padding:3px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px">'
-      +'<input type="number" min="0" value="'+it.cur+'" onchange="progCustomSet(\'cur\','+i+',this.value)" style="width:54px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">'
-      +'<span class="muted">/</span>'
-      +'<input type="number" min="1" value="'+it.tot+'" onchange="progCustomSet(\'tot\','+i+',this.value)" style="width:54px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">'
-      +'</div></div>';
+    return '<div class="prog-sec" style="display:flex;justify-content:space-between;align-items:center">'
+      +'<span>'+escAttr(g.n)+'</span>'+secBtns(g)+'</div>'
+      +(rows||'<div class="muted" style="font-size:12px;padding:4px 0">该组暂无条目，点右上 ＋ 添加</div>');
   }).join('');
-  let html=`
+  const html=`
   <div class="panel">
     <div class="spread"><h2 style="margin:0">📊 进度概览</h2><span class="pill">可编辑 · 云同步</span></div>
-
-    <div class="prog-sec">🔤 单词（一刷 / 二刷 / 三刷）</div>
-    ${vocabRows}
-
-    <div class="prog-sec">🇬🇧 英语（一刷 / 二刷）</div>
-    ${engRows}
-
-    <div class="prog-sec">🇨🇳 政治（1000题按节 一刷/二刷 / 肖八 / 肖四）</div>
-    <div class="prog-row">
-      <div class="spread"><b>🇨🇳 1000题</b><span class="muted">一刷 ${pol.q1000}/${pol.q1000Total||30} · 二刷 ${pol.q1000y2||0}/${pol.q1000Total||30}</span></div>
-      <div class="bar"><i style="width:${progPct(pol.q1000,pol.q1000Total||30)}%"></i></div>
-      <div class="bar" style="margin-top:4px;--accent:var(--c-prog)"><i style="width:${progPct(pol.q1000y2||0,pol.q1000Total||30)}%"></i></div>
-      <div class="row" style="margin-top:6px;gap:6px;align-items:center;flex-wrap:wrap">
-        <span class="muted" style="font-size:12px">一刷</span>
-        <input type="number" min="0" value="${pol.q1000}" onchange="progPolSet('q1000',this.value)" style="width:52px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">
-        <span class="muted" style="font-size:12px">二刷</span>
-        <input type="number" min="0" value="${pol.q1000y2||0}" onchange="progPolSet('q1000y2',this.value)" style="width:52px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">
-        <span class="muted" style="font-size:12px">/ 总</span>
-        <input type="number" min="1" value="${pol.q1000Total||30}" onchange="progPolTot(this.value)" style="width:52px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">
-        <span class="muted" style="font-size:12px">节</span>
-      </div>
-    </div>
-    ${stat('肖八', pol.x8||0, 8)}
-    ${stat('肖四', pol.x4||0, 4)}
-    <div class="row" style="margin-top:6px;gap:6px;flex-wrap:wrap;align-items:center">
-      <span class="muted" style="font-size:12px">肖八</span>
-      <input type="number" min="0" max="8" value="${pol.x8||0}" onchange="progPolSet('x8',this.value)" style="width:50px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">
-      <button class="btn ghost xs" onclick="progPolStep('x8',1)">＋</button>
-      <span class="muted" style="font-size:12px">肖四</span>
-      <input type="number" min="0" max="4" value="${pol.x4||0}" onchange="progPolSet('x4',this.value)" style="width:50px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">
-      <button class="btn ghost xs" onclick="progPolStep('x4',1)">＋</button>
-    </div>
-
-    <div class="prog-sec">📚 专业课（心理 · ${r} 轮）</div>
-    ${knowRows}
-
-    <div class="prog-sec">✏️ 自定义（${progCustomArr().length}）</div>
-    ${customRows||'<div class="muted" style="font-size:12px;padding:4px 0">还没有自定义条目，比如：肖秀荣带背、作文背诵等</div>'}
-    <div class="row" style="margin-top:8px">
-      <button class="btn sm" onclick="progCustomAdd()">＋ 新增条目</button>
+    ${groupHtml}
+    <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap">
+      <button class="btn sm" onclick="progAddItem()">＋ 新增条目</button>
+      <button class="btn ghost sm" onclick="progGroupAdd()">＋ 新增分组</button>
+      <button class="btn ghost sm" onclick="progResetAll()">🛟 恢复默认</button>
     </div>
   </div>
 
@@ -5526,6 +5632,10 @@ async function syncNow(forcePull){
     merged.planner=plannerMerge(state.planner,remoteState.planner,merged.planner);
     // 进度概览自定义条目：按 id 并集
     merged.progCustom=arrayMergeByKey(state.progCustom||[],remoteState.progCustom||[],x=>x.id);
+    // 进度概览布局：分组/改名/轮数/总量覆盖/隐藏 并集合并（本地优先）
+    (function(){ const P=['progGroups','progItemNames','progGroupNames','progRounds','progTotOv'];
+      P.forEach(k=>{ const a=state[k]||{}, b=remoteState[k]||{}; merged[k]=Object.assign({},b,a); });
+      merged.progHidden=Array.from(new Set([].concat(state.progHidden||[],remoteState.progHidden||[]))); })();
     // 其他标量字段：取较新版本（谁的 mtime 新用谁的）
     const newerFields=['examDate','taskDate','taskGen','wkPos','checkins'];
     const base = remoteMtime>localMtime ? remoteState : state;
@@ -5941,6 +6051,9 @@ async function cloudRestore(){
     merged.exam=examMerge(state.exam||{},remoteState.exam||{});
     merged.planner=plannerMerge(state.planner,remoteState.planner,merged.planner);
     merged.progCustom=arrayMergeByKey(state.progCustom||[],remoteState.progCustom||[],x=>x.id);
+    (function(){ const P=['progGroups','progItemNames','progGroupNames','progRounds','progTotOv'];
+      P.forEach(k=>{ const a=state[k]||{}, b=remoteState[k]||{}; merged[k]=Object.assign({},b,a); });
+      merged.progHidden=Array.from(new Set([].concat(state.progHidden||[],remoteState.progHidden||[]))); })();
     const remoteMtime=remote._mtime||0;
     const localMtime=state._mtime||0;
     const newerFields=['examDate','taskDate','taskGen','wkPos','checkins'];
@@ -6153,6 +6266,9 @@ function mergeForCloud(local, remote){
   out.exam=examMerge(local.exam||{},remote.exam||{});
   // 进度概览自定义条目：按 id 并集
   out.progCustom=arrayMergeByKey(local.progCustom||[],remote.progCustom||[],x=>x.id);
+  // 进度概览布局字段并集
+  ['progGroups','progItemNames','progGroupNames','progRounds','progTotOv'].forEach(k=>{ out[k]=Object.assign({},remote[k]||{},local[k]||{}); });
+  out.progHidden=Array.from(new Set([].concat(local.progHidden||[],remote.progHidden||[])));
   out.sync=local.sync;
   out.gh=local.gh;
   out._mtime=Date.now();
