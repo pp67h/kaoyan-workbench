@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.10.5.11-->
+<!--APP_VER:2026.10.13.1-->
 <style>
 :root{
   --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
@@ -747,6 +747,7 @@ const DEFAULT_STATE = {
   examDate:'2026-12-21',
   keyDates:[],            // 用户自定义关键节点（数组为空时使用默认 8 条）
   keyDatesDeleted:[],     // 关键节点删除墓碑（含 id 与 _t 删除时间，同步用）
+  progCustom:[],          // 进度概览自定义条目 [{id,n,cur,tot}]
   sched:[],               // 用户自定义作息（数组为空时使用默认 SCHEDULE）
   studyTime:{'英语':0,'政治':0,'专业课':0,'生活':0}, // 【兼容旧数据】每日累计学习时长（分钟），按科目
   studyToday:{date:'',英语:0,政治:0,专业课:0,生活:0}, // 当日各科计时秒数
@@ -1632,6 +1633,17 @@ function progPolTot(val){ state.pol.q1000Total=Math.max(1,parseInt(val)||30); st
 /* 进度概览：专业课（心理）页进度 */
 function progKnowSet(subj,val){ const d=state.know.pages[state.know.round][subj]; const mx=d.total>0?d.total:Infinity; d.cur=Math.max(0,Math.min(mx,parseInt(val)||0)); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
 function progKnowTot(subj,val){ const d=state.know.pages[state.know.round][subj]; d.total=Math.max(0,parseInt(val)||0); d.cur=Math.min(d.cur,d.total); syncMonthPlanAfterProgChange(); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
+/* 进度概览：自定义条目（可增删改，云同步按 id 合并） */
+function progCustomArr(){ if(!Array.isArray(state.progCustom)) state.progCustom=[]; return state.progCustom; }
+function progCustomAdd(){ progCustomArr().push({id:uid(),n:'新条目',cur:0,tot:100}); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); }
+function progCustomDel(i){ progCustomArr().splice(i,1); persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide(); toast('已删除'); }
+function progCustomSet(k,i,val){
+  const it=progCustomArr()[i]; if(!it) return;
+  if(k==='n'){ it.n=(val||'').trim()||'条目'; }
+  else if(k==='tot'){ it.tot=Math.max(1,parseInt(val)||1); it.cur=Math.min(it.cur,it.tot); }
+  else { it.cur=Math.max(0,Math.min(it.tot,parseInt(val)||0)); }
+  persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide();
+}
 function renderProgress(main){
   const pol=state.pol; const v=state.vocab; const e=state.eng;
   const engCards=['完形','阅读','新题型','作文'];
@@ -1684,6 +1696,20 @@ function renderProgress(main){
         <span class="muted" style="font-size:12px">页</span>
       </div>
     </div>`; }).join('');
+  const customRows=progCustomArr().map((it,i)=>{
+    const pct=progPct(it.cur,it.tot);
+    const nm=escAttr(it.n);
+    return '<div class="prog-row">'
+      +'<div class="spread"><b>✏️ '+nm+'</b><span style="display:flex;align-items:center;gap:8px"><span class="muted">'+it.cur+'/'+it.tot+'（'+pct+'%）</span>'
+      +'<button class="btn ghost xs" style="padding:1px 8px;font-size:12px;color:#c0392b" onclick="progCustomDel('+i+')">×</button></span></div>'
+      +'<div class="bar"><i style="width:'+pct+'%"></i></div>'
+      +'<div class="row" style="margin-top:6px;gap:6px;align-items:center;flex-wrap:wrap">'
+      +'<input type="text" value="'+nm+'" onchange="progCustomSet(\'n\','+i+',this.value)" style="flex:1;min-width:90px;padding:3px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px">'
+      +'<input type="number" min="0" value="'+it.cur+'" onchange="progCustomSet(\'cur\','+i+',this.value)" style="width:54px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">'
+      +'<span class="muted">/</span>'
+      +'<input type="number" min="1" value="'+it.tot+'" onchange="progCustomSet(\'tot\','+i+',this.value)" style="width:54px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">'
+      +'</div></div>';
+  }).join('');
   let html=`
   <div class="panel">
     <div class="spread"><h2 style="margin:0">📊 进度概览</h2><span class="pill">可编辑 · 云同步</span></div>
@@ -1722,6 +1748,12 @@ function renderProgress(main){
 
     <div class="prog-sec">📚 专业课（心理 · ${r} 轮）</div>
     ${knowRows}
+
+    <div class="prog-sec">✏️ 自定义（${progCustomArr().length}）</div>
+    ${customRows||'<div class="muted" style="font-size:12px;padding:4px 0">还没有自定义条目，比如：肖秀荣带背、作文背诵等</div>'}
+    <div class="row" style="margin-top:8px">
+      <button class="btn sm" onclick="progCustomAdd()">＋ 新增条目</button>
+    </div>
   </div>
 
   <div class="panel">
@@ -5488,6 +5520,12 @@ async function syncNow(forcePull){
     merged.diary=Object.assign({},state.diary||{},remoteState.diary||{});
     merged.calMile=Object.assign({},state.calMile||{},remoteState.calMile||{});
     merged.calStat=deepMergeMax(state.calStat||{},remoteState.calStat||{});
+    // 真题得分：记录按 id 并集 + 删除墓碑（之前缺失会导致同步后得分被清空！）
+    merged.exam=examMerge(state.exam||{},remoteState.exam||{});
+    // 背诵计划：按 id 合并（之前缺失会被重置！）
+    merged.planner=plannerMerge(state.planner,remoteState.planner,merged.planner);
+    // 进度概览自定义条目：按 id 并集
+    merged.progCustom=arrayMergeByKey(state.progCustom||[],remoteState.progCustom||[],x=>x.id);
     // 其他标量字段：取较新版本（谁的 mtime 新用谁的）
     const newerFields=['examDate','taskDate','taskGen','wkPos','checkins'];
     const base = remoteMtime>localMtime ? remoteState : state;
@@ -5579,14 +5617,32 @@ function apkCopyLink(url){
 }
 /* ---------- 真题得分 ---------- */
 const EXAM_PARTS={
-  1:[{k:'wanxing',n:'完形',f:10},{k:'text1',n:'Text1',f:10},{k:'text2',n:'Text2',f:10},{k:'text3',n:'Text3',f:10},{k:'text4',n:'Text4',f:10},{k:'xinxing',n:'新题型',f:10},{k:'fanyi',n:'翻译',f:10},{k:'xiao',n:'小作文',f:10},{k:'da',n:'大作文',f:20}],
-  2:[{k:'wanxing',n:'完形',f:10},{k:'text1',n:'Text1',f:10},{k:'text2',n:'Text2',f:10},{k:'text3',n:'Text3',f:10},{k:'text4',n:'Text4',f:10},{k:'xinxing',n:'新题型',f:10},{k:'fanyi',n:'翻译',f:15},{k:'xiao',n:'小作文',f:10},{k:'da',n:'大作文',f:15}]
+  1:[{k:'wanxing',n:'完形',f:10},{k:'reading',n:'阅读',f:40},{k:'xinxing',n:'新题型',f:10},{k:'fanyi',n:'翻译',f:10},{k:'xiao',n:'小作文',f:10},{k:'da',n:'大作文',f:20}],
+  2:[{k:'wanxing',n:'完形',f:10},{k:'reading',n:'阅读',f:40},{k:'xinxing',n:'新题型',f:10},{k:'fanyi',n:'翻译',f:15},{k:'xiao',n:'小作文',f:10},{k:'da',n:'大作文',f:15}]
 };
 function examState(){
   if(!state.exam||typeof state.exam!=='object') state.exam={paper:1,records:[],deleted:[]};
   if(!Array.isArray(state.exam.records)) state.exam.records=[];
   if(!Array.isArray(state.exam.deleted)) state.exam.deleted=[];
   if(!state.exam.paper) state.exam.paper=1;
+  // 旧数据迁移：Text1-4 逐篇记录 → 合并为「阅读」一条（按年份合计，满分40）
+  if(!state.exam._rmig){
+    const byY={}; const keep=[];
+    state.exam.records.forEach(r=>{
+      if(r.p==='text1'||r.p==='text2'||r.p==='text3'||r.p==='text4'){ (byY[r.y]=byY[r.y]||[]).push(r); }
+      else keep.push(r);
+    });
+    Object.keys(byY).forEach(y=>{
+      const arr=byY[y], first=arr[0];
+      keep.push({id:first.id,y:+y,p:'reading',
+        s:Math.min(40,arr.reduce((a,r)=>a+(r.s||0),0)),
+        d:arr.map(r=>r.d||'').sort().pop(),
+        n:arr.map(r=>r.n).filter(Boolean).join('；')});
+      for(let i=1;i<arr.length;i++){ if(!state.exam.deleted.includes(arr[i].id)) state.exam.deleted.push(arr[i].id); }
+    });
+    if(Object.keys(byY).length){ state.exam.records=keep; save('state',state); }
+    state.exam._rmig=1;
+  }
   return state.exam;
 }
 function exParts(){ return EXAM_PARTS[examState().paper]||EXAM_PARTS[1]; }
@@ -5601,7 +5657,7 @@ function exStats(){
   });
   return {fmap,byPart,byYear};
 }
-let _exPart='text1';
+let _exPart='reading';
 function exPick(k){
   _exPart=k;
   document.querySelectorAll('#exPartChips .exchip').forEach(el=>el.classList.toggle('on',el.dataset.k===k));
@@ -5641,7 +5697,7 @@ function exPaper(n){
   const e=examState();
   if(e.paper===n) return;
   e.paper=n; e._pt=Date.now(); save('state',state);
-  _exPart='text1';
+  _exPart='reading';
   toast(n===1?'已切换到英语一（翻译10/大作文20）':'已切换到英语二（翻译15/大作文15）');
   renderEng($('#main')); $('#side').innerHTML=renderSide();
 }
@@ -5660,19 +5716,23 @@ function examMerge(a,b){
 function renderExamBlock(){
   const e=examState(), st=exStats(), parts=exParts();
   const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  // 按年份折算百分制总分
+  // 按年份：只有该年份所有题型都录了才算"完整"，才给折算总分
+  const fullTotal=parts.reduce((a,p)=>a+p.f,0);
   const yearRows=Object.keys(st.byYear).map(Number).sort((a,b)=>b-a).map(y=>{
     const rs=st.byYear[y];
-    let s=0,f=0;
-    rs.forEach(r=>{ const p=st.fmap[r.p]; if(p){ s+=r.s; f+=p.f; } });
-    const pct=f>0?Math.round(s/f*1000)/10:0;
-    const detail=parts.filter(p=>rs.some(r=>r.p===p.k)).map(p=>{
+    const doneSet=new Set(rs.map(r=>r.p));
+    const done=parts.filter(p=>doneSet.has(p.k)).length;
+    const doneAll=done>=parts.length;
+    let s=0; rs.forEach(r=>{ s+=r.s; });
+    const pct=doneAll?Math.round(s/fullTotal*1000)/10:null;
+    const detail=parts.filter(p=>doneSet.has(p.k)).map(p=>{
       const rr=rs.filter(r=>r.p===p.k).sort((a,b)=>(b.d||'').localeCompare(a.d||''))[0];
       return p.n+' '+rr.s;
     }).join(' · ');
-    return {y:y,pct:pct,raw:s,full:f,cnt:rs.length,detail:detail};
+    return {y:y,pct:pct,raw:s,full:fullTotal,done:done,total:parts.length,detail:detail};
   });
-  const overall=yearRows.length?(yearRows.reduce((a,r)=>a+r.pct,0)/yearRows.length):null;
+  const doneYears=yearRows.filter(r=>r.pct!=null);
+  const overall=doneYears.length?(doneYears.reduce((a,r)=>a+r.pct,0)/doneYears.length):null;
   const totalCnt=e.records.length;
   // 各题型统计
   const partRows=parts.map(p=>{
@@ -5688,7 +5748,7 @@ function renderExamBlock(){
       <div style="min-width:0">
         <div style="font-size:11px;opacity:.85;letter-spacing:.08em">AVERAGE · 各年折算百分制</div>
         <div style="font-size:38px;font-weight:800;line-height:1.15;margin-top:2px">${overall!=null?overall.toFixed(1):'—'}<span style="font-size:14px;font-weight:600;opacity:.85"> 分</span></div>
-        <div style="font-size:12px;opacity:.9;margin-top:2px">${overall!=null?('已练 '+totalCnt+' 次 · 覆盖 '+yearRows.length+' 个年份'):'还没有记录，从下面添加第一次成绩吧'}</div>
+        <div style="font-size:12px;opacity:.9;margin-top:2px">${overall!=null?('已练 '+totalCnt+' 次 · 完整刷完 '+doneYears.length+' 个年份'):'还没有记录，从下面添加第一次成绩吧'}</div>
       </div>
       <div style="flex-shrink:0;text-align:center">
         <div style="font-size:22px;line-height:1">📈</div>
@@ -5720,32 +5780,50 @@ function renderExamBlock(){
   </div>
   <div class="panel">
     <h3 style="margin-top:0">🎯 各题型平均分</h3>
+    <div class="muted" style="font-size:11px;margin:-4px 0 6px">点击题型行可展开该题型的历次记录</div>
     ${partRows.map(r=>{
       const pct=r.avg!=null?Math.round(r.avg/r.p.f*100):0;
-      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px dashed var(--line)">'
+      const recs=(st.byPart[r.p.k]||[]).slice().sort((a,b)=>(b.d||'').localeCompare(a.d||''));
+      return '<div style="border-bottom:1px dashed var(--line)">'
+        +'<div style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer" onclick="exTogglePart(\''+r.p.k+'\')">'
         +'<div style="width:64px;font-size:13px;font-weight:600;flex-shrink:0">'+r.p.n+'</div>'
         +'<div class="bar exbar" style="flex:1"><i style="width:'+pct+'%"></i></div>'
         +'<div style="width:132px;text-align:right;font-size:12px;flex-shrink:0">'
         +(r.avg!=null
           ? '<b style="font-size:15px;color:var(--c-exam)">'+r.avg.toFixed(1)+'</b><span class="muted">/'+r.p.f+'</span><br><span class="muted" style="font-size:10.5px">最高'+r.mx+' · '+r.cnt+'次</span>'
           : '<span class="muted" style="font-size:11px">未开始</span>')
+        +'</div>'
+        +'<span id="exArrow_'+r.p.k+'" class="muted" style="font-size:11px;flex-shrink:0;width:12px">'+(recs.length?'▾':'')+'</span>'
+        +'</div>'
+        +'<div id="exPartRec_'+r.p.k+'" style="display:none;padding:0 0 8px 10px">'
+        +(recs.length?recs.map(x=>{
+            return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px dashed var(--line)">'
+              +'<span style="font-size:12.5px;min-width:0"><b>'+x.y+'</b> <span class="muted" style="font-size:11px">'+x.d+(x.n?' · '+esc(x.n):'')+'</span></span>'
+              +'<span style="display:flex;align-items:center;gap:8px;flex-shrink:0"><b style="color:var(--c-exam);font-size:14px">'+x.s+'</b><span class="muted" style="font-size:11px">/'+r.p.f+'</span>'
+              +'<button class="btn ghost sm" style="padding:2px 9px;font-size:11px" onclick="event.stopPropagation();exDel(\''+x.id+'\')">删</button></span></div>';
+          }).join('')
+          :'<div class="muted" style="font-size:11px;padding:4px 0">还没有记录</div>')
         +'</div></div>';
     }).join('')}
   </div>
-  ${yearRows.length?'<div class="panel"><h3 style="margin-top:0">🗓 按年份</h3>'+yearRows.map(r=>
+  ${yearRows.length?'<div class="panel"><h3 style="margin-top:0">🗓 按年份</h3><div class="muted" style="font-size:11px;margin:-4px 0 6px">所有题型都录完的年份才会算折算总分</div>'+yearRows.map(r=>
       '<div style="padding:8px 0;border-bottom:1px dashed var(--line)">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:14px">'+r.y+' 年</b>'
-      +'<span style="font-size:13px;white-space:nowrap"><b style="color:var(--c-exam);font-size:15px">'+r.pct+'</b> 分 <span class="muted" style="font-size:11px">（卷面 '+r.raw+'/'+r.full+'）</span></span></div>'
+      +(r.pct!=null
+        ?'<span style="font-size:13px;white-space:nowrap"><b style="color:var(--c-exam);font-size:15px">'+r.pct+'</b> 分 <span class="muted" style="font-size:11px">（卷面 '+r.raw+'/'+r.full+'）</span></span>'
+        :'<span class="muted" style="font-size:12px;white-space:nowrap">已完成 '+r.done+'/'+r.total+' 项</span>')
+      +'</div>'
       +'<div class="muted" style="font-size:11.5px;margin-top:2px">'+esc(r.detail)+'</div>'
-      +'</div>').join('')+'</div>':''}
-  ${totalCnt?'<div class="panel"><h3 style="margin-top:0">📋 全部记录</h3>'+e.records.slice().sort((a,b)=>(b.d||'').localeCompare(a.d||'')).map(r=>{
-      const p=st.fmap[r.p]||{n:r.p,f:10};
-      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px dashed var(--line)">'
-        +'<span style="font-size:13px;min-width:0"><b>'+r.y+'</b> · '+p.n+' <span class="muted" style="font-size:11px">'+r.d+(r.n?' · '+esc(r.n):'')+'</span></span>'
-        +'<span style="display:flex;align-items:center;gap:8px;flex-shrink:0"><b style="color:var(--c-exam);font-size:15px">'+r.s+'</b><span class="muted" style="font-size:11px">/'+p.f+'</span>'
-        +'<button class="btn ghost sm" style="padding:2px 9px;font-size:11px" onclick="exDel(\''+r.id+'\')">删</button></span></div>';
-    }).join('')+'</div>':''}`;
+      +'</div>').join('')+'</div>':''}`;
   return html;
+}
+function exTogglePart(k){
+  const el=document.getElementById('exPartRec_'+k);
+  if(!el) return;
+  const open=el.style.display==='none';
+  el.style.display=open?'block':'none';
+  const ar=document.getElementById('exArrow_'+k);
+  if(ar) ar.textContent=open?'▴':'▾';
 }
 
 function renderCloud(main){
@@ -5859,6 +5937,10 @@ async function cloudRestore(){
     merged.diary=Object.assign({},state.diary||{},remoteState.diary||{});
     merged.calMile=Object.assign({},state.calMile||{},remoteState.calMile||{});
     merged.calStat=deepMergeMax(state.calStat||{},remoteState.calStat||{});
+    // 真题得分 / 背诵计划 / 自定义进度：同 syncNow 的合并规则（防同步丢失）
+    merged.exam=examMerge(state.exam||{},remoteState.exam||{});
+    merged.planner=plannerMerge(state.planner,remoteState.planner,merged.planner);
+    merged.progCustom=arrayMergeByKey(state.progCustom||[],remoteState.progCustom||[],x=>x.id);
     const remoteMtime=remote._mtime||0;
     const localMtime=state._mtime||0;
     const newerFields=['examDate','taskDate','taskGen','wkPos','checkins'];
@@ -6069,6 +6151,8 @@ function mergeForCloud(local, remote){
   out.planner=plannerMerge(local.planner, remote.planner, out.planner);
   // 真题得分：记录按 id 并集，删除走墓碑，卷种取更新时间新的
   out.exam=examMerge(local.exam||{},remote.exam||{});
+  // 进度概览自定义条目：按 id 并集
+  out.progCustom=arrayMergeByKey(local.progCustom||[],remote.progCustom||[],x=>x.id);
   out.sync=local.sync;
   out.gh=local.gh;
   out._mtime=Date.now();
