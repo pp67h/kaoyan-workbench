@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.10.13.3-->
+<!--APP_VER:2026.10.13.4-->
 <style>
 :root{
   --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
@@ -1419,7 +1419,7 @@ function renderCal(main){
       </div>
       <div class="row" style="margin-top:6px;gap:8px;align-items:center">
         <span style="font-size:12px;white-space:nowrap" class="muted">🔗 关联进度：</span>
-        <select id="mPlanLink" style="flex:1;min-width:140px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;font-size:13px">
+        <select id="mPlanLink" onchange="mPlanLinkPick(this.value)" style="flex:1;min-width:140px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;font-size:13px">
           <option value="">不关联（独立任务）</option>
           ${progressLinkOptions().map(o=>`<option value="${o.link}">${o.label}（${o.cur}/${o.total}）</option>`).join('')}
         </select>
@@ -1539,6 +1539,10 @@ function renderMonthList(){
     const pct=tot?Math.round(cur/tot*100):0;
     const unit=it.unit||'页';
     const linkBadge=it.link?'<span class="chip" style="font-size:10px;background:#d8e8be;color:#4a6b3a;padding:1px 6px;border-radius:8px;border:none">🔗 已关联进度</span>':'';
+    const linkSel='<select onchange="monthSetLink('+i+',this.value)" style="margin-top:6px;width:100%;padding:4px 6px;border:1px solid var(--line);border-radius:6px;font-size:12px">'
+      +'<option value="">不关联（独立任务）</option>'
+      +progressLinkOptions().map(o=>'<option value="'+o.link+'"'+(o.link===it.link?' selected':'')+'>'+escAttr(o.label)+'（'+o.cur+'/'+o.total+'）</option>').join('')
+      +'</select>';
     const progUi=`
       <div class="mp-row" style="margin-top:6px"><span class="muted">进度 ${cur} / ${tot} ${unit}</span><b>${pct}%</b></div>
       <div class="bar"><i style="width:${pct}%"></i></div>
@@ -1549,10 +1553,11 @@ function renderMonthList(){
         <input type="number" min="0" value="${tot}" onchange="monthSetTotalVal(${i},this.value)" style="width:56px;padding:3px 6px;border:1px solid var(--line);border-radius:6px">
         <input type="text" value="${escAttr(unit)}" onchange="monthSetUnit(${i},this.value)" title="单位，如 页/章/个/篇" style="width:52px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;font-size:12px">
         <button class="btn ghost xs" onclick="monthStep(${i},1)">＋</button>
-      </div>`;
+      </div>
+      ${linkSel}`;
     return `<div class="mp-task">
       <div class="row" style="align-items:center">
-        <label style="flex:1"><input type="checkbox" ${it.done?'checked':''} onchange="monthToggle(${i})"> ${it.done?'<s>':''}${escHtml(it.t)}${it.done?'</s>':''} ${linkBadge}</label>
+        <label style="flex:1"><input type="checkbox" ${it.done?'checked':''} onchange="monthToggle(${i})"> ${it.done?'<s>':''}<span contenteditable="true" id="mpName${i}" onblur="monthSetName(${i},this.innerText)" style="outline:none;border-bottom:1px dashed var(--line)">${escHtml(it.t)}</span>${it.done?'</s>':''} ${linkBadge}</label>
         <button class="btn ghost xs" onclick="monthMove(${i},-1)" title="上移" ${i===0?'disabled style="opacity:.3"':''}>↑</button>
         <button class="btn ghost xs" onclick="monthMove(${i},1)" title="下移" ${i===list.length-1?'disabled style="opacity:.3"':''}>↓</button>
         <button class="btn ghost sm" onclick="monthDel(${i})">删</button>
@@ -1560,6 +1565,22 @@ function renderMonthList(){
       ${progUi}
     </div>`;
   }).join('');
+}
+/* 任务改名（点名字直接改） */
+function monthSetName(i,v){
+  const mk=String(2026)+'-'+String(calMonth).padStart(2,'0');
+  const arr=state.monthPlan.filter(x=>x.month===mk); const it=arr[i]; if(!it) return;
+  v=(v||'').trim(); if(v) it.t=v; else renderMonthList();
+  persist(); renderMonthList();
+}
+/* 给已存在的任务换/加关联：带上当前进度 */
+function monthSetLink(i,link){
+  const mk=String(2026)+'-'+String(calMonth).padStart(2,'0');
+  const arr=state.monthPlan.filter(x=>x.month===mk); const it=arr[i]; if(!it) return;
+  if(link){ it.link=link; const pv=getProgressByLink(link);
+    if(pv){ it.cur=pv.cur; if(pv.total) it.total=pv.total; if(!it.unit) it.unit=linkUnitGuess(link); } }
+  else { delete it.link; }
+  it._t=Date.now(); persist(); renderMonthList();
 }
 function monthStep(i,d){
   if(!state.monthPlan) return;
@@ -1876,7 +1897,7 @@ function renderProgress(main){
     </div>
     <div class="row" style="margin-top:6px;gap:8px;align-items:center">
       <span class="muted" style="font-size:12px;white-space:nowrap">🔗 关联进度：</span>
-      <select id="mPlanLink" style="flex:1;min-width:140px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;font-size:13px">
+      <select id="mPlanLink" onchange="mPlanLinkPick(this.value)" style="flex:1;min-width:140px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;font-size:13px">
         <option value="">不关联（独立任务）</option>
         ${progressLinkOptions().map(o=>`<option value="${o.link}">${o.label}（${o.cur}/${o.total}）</option>`).join('')}
       </select>
@@ -1885,6 +1906,31 @@ function renderProgress(main){
   main.innerHTML=html;
   try{ syncMonthPlanFromProgress(); }catch(e){}
   if(typeof renderMonthList==='function') renderMonthList();
+}
+/* 🔗 选中关联后：自动回填 任务名 / 总量 / 单位（可再手改） */
+function mPlanLinkPick(link){
+  if(!link) return;
+  const o=progressLinkOptions().find(x=>x.link===link);
+  if(!o) return;
+  const nEl=$('#mPlanIn'), tEl=$('#mPlanTotal'), uEl=$('#mPlanUnit');
+  if(nEl && !nEl.value.trim()) nEl.value=o.label;
+  if(tEl && !(parseInt(tEl.value)||0)) tEl.value=o.total||'';
+  if(uEl && !uEl.value.trim()) uEl.value=linkUnitGuess(link);
+}
+function linkUnitGuess(link){
+  const p=(link||'').split('|');
+  if(p[0]==='pg'){
+    const it=(function(){ let found=null; progGroupsAll().forEach(g=>{ progItemsOf(g.id).forEach(x=>{ if(x.id===p[1]) found=x; }); }); return found; })();
+    const gid=it?it.gid:'';
+    if(gid==='g_know') return '页';
+    if(gid==='g_pol') return '节';
+    if(gid==='g_eng') return '篇';
+    return '个';
+  }
+  if(p[0]==='know') return '页';
+  if(p[0]==='eng') return '篇';
+  if(p[0]==='pol') return '节';
+  return '个';
 }
 function monthAdd(){
   const v=$('#mPlanIn').value.trim(); if(!v)return;
