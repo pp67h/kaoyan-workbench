@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.10.13.5-->
+<!--APP_VER:2026.10.13.6-->
 <style>
 :root{
   --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
@@ -1705,17 +1705,29 @@ const PROG_PRESETS=[
    read:()=>[{cur:state.pol.x8||0,tot:8}],write:(r,cur)=>{state.pol.x8=Math.max(0,Math.min(8,cur));syncMonthPlanAfterProgChange();}},
   {id:'pp_x4',gid:'g_pol',n:'肖四',defR:1,maxR:1,
    read:()=>[{cur:state.pol.x4||0,tot:4}],write:(r,cur)=>{state.pol.x4=Math.max(0,Math.min(4,cur));syncMonthPlanAfterProgChange();}},
-  {id:'pk_发展心理学',gid:'g_know',n:'发展心理学',defR:1,maxR:1,knowC:'发展心理学'},
-  {id:'pk_心理学导论',gid:'g_know',n:'心理学导论',defR:1,maxR:1,knowC:'心理学导论'},
-  {id:'pk_研究方法',gid:'g_know',n:'心理与教育研究方法',defR:1,maxR:1,knowC:'心理与教育研究方法'},
+  {id:'pk_发展心理学',gid:'g_know',n:'发展心理学',defR:0,maxR:4,knowC:'发展心理学'}, // defR=0 表示跟随背诵页当前轮数
+  {id:'pk_心理学导论',gid:'g_know',n:'心理学导论',defR:0,maxR:4,knowC:'心理学导论'},
+  {id:'pk_研究方法',gid:'g_know',n:'心理与教育研究方法',defR:0,maxR:4,knowC:'心理与教育研究方法'},
 ];
 function _engPresetRead(c){const o=(state.eng||{})[c]||{y1:0,y2:0,y3:0,total:0};const t=o.total||0;
   return [{cur:o.y1||0,tot:t},{cur:o.y2||0,tot:t},{cur:o.y3||0,tot:t}];}
 function _engPresetWrite(c,r,cur,tot){const o=state.eng||(state.eng={});if(!o[c])o[c]={y1:0,y2:0,y3:0,total:0};
   o[c].total=Math.max(1,tot);o[c]['y'+(r+1)]=cur;syncMonthPlanAfterProgChange();}
 PROG_PRESETS.forEach(p=>{ if(p.engC){ p.read=()=>_engPresetRead(p.engC); p.write=(r,cur,tot)=>_engPresetWrite(p.engC,r,cur,tot); } });
-function _knowPresetRead(c){const d=state.know.pages[state.know.round][c]||{cur:0,total:0};return [{cur:d.cur||0,tot:d.total||0}];}
-function _knowPresetWrite(c,r,cur,tot){const d=state.know.pages[state.know.round][c];d.total=Math.max(0,tot);d.cur=Math.max(0,Math.min(d.total,cur));syncMonthPlanAfterProgChange();}
+/* 专业课：读全部4轮（know.pages[1..4]），与背诵计划页的 1/2/3/4轮 完全同一套数据 */
+function _knowPresetRead(c){
+  return [1,2,3,4].map(rr=>{ const d=(state.know.pages[rr]||{})[c]||{cur:0,total:0}; return {cur:d.cur||0,tot:d.total||0}; });
+}
+function _knowPresetWrite(c,r,cur,tot){
+  const rr=r+1;
+  if(!state.know.pages[rr]) state.know.pages[rr]={};
+  if(!state.know.pages[rr][c]) state.know.pages[rr][c]={cur:0,total:0};
+  const d=state.know.pages[rr][c];
+  d.total=Math.max(0,tot); d.cur=Math.max(0,Math.min(d.total,cur));
+  syncMonthPlanAfterProgChange();
+}
+/* 专业课默认轮数跟随背诵页当前轮 */
+function _knowDefR(){ return Math.max(1,Math.min(4,state.know.round||1)); }
 PROG_PRESETS.forEach(p=>{ if(p.knowC){ p.read=()=>_knowPresetRead(p.knowC); p.write=(r,cur,tot)=>_knowPresetWrite(p.knowC,r,cur,tot); } });
 /* 组列表：预置+自定义，应用改名 */
 function progGroupsAll(){
@@ -1729,7 +1741,7 @@ function progItemsOf(gid){
   const out=[];
   PROG_PRESETS.filter(p=>p.gid===gid).forEach(p=>{
     const rounds=p.read().map((x,i)=>({cur:x.cur,tot:(state.progTotOv[p.id+'#'+i]!==undefined?state.progTotOv[p.id+'#'+i]:x.tot)}));
-    out.push({id:p.id,gid:gid,n:state.progItemNames[p.id]||p.n,rounds:rounds,defR:p.defR,maxR:p.maxR,preset:true});
+    out.push({id:p.id,gid:gid,n:state.progItemNames[p.id]||p.n,rounds:rounds,defR:(p.defR===0?_knowDefR():p.defR),maxR:p.maxR,preset:true});
   });
   state.progCustom.filter(it=>it.gid===gid).forEach(it=>{
     out.push({id:it.id,gid:gid,n:it.n,rounds:it.rounds,defR:it.rounds.length,maxR:3,preset:false});
@@ -1740,7 +1752,7 @@ function progRoundCnt(it){ // 当前轮数
   const ov=state.progRounds[it.id];
   return Math.max(1,Math.min(it.maxR,ov||it.defR||1));
 }
-const PROG_RLABEL=['一轮','二轮','三轮'];
+const PROG_RLABEL=['一轮','二轮','三轮','四轮'];
 /* 改某轮 cur/tot（预置写回真实数据+总量覆盖；自定义直接改） */
 function progSetVal(id,r,cur,tot){
   cur=Math.max(0,parseInt(cur)||0); tot=Math.max(1,parseInt(tot)||1); cur=Math.min(cur,tot);
@@ -1752,14 +1764,14 @@ function progSetVal(id,r,cur,tot){
 function progAddRound(id){ // 增加一轮
   const ps=PROG_PRESETS.find(p=>p.id===id);
   let curR,maxR;
-  if(ps){ curR=progRoundCnt({id:id,defR:ps.defR,maxR:ps.maxR}); maxR=ps.maxR; state.progRounds[id]=Math.min(maxR,curR+1); }
+  if(ps){ curR=progRoundCnt({id:id,defR:(ps.defR===0?_knowDefR():ps.defR),maxR:ps.maxR}); maxR=ps.maxR; state.progRounds[id]=Math.min(maxR,curR+1); }
   else { const it=state.progCustom.find(x=>x.id===id); if(!it)return; curR=it.rounds.length; maxR=3;
          if(curR<3) it.rounds.push({cur:0,tot:it.rounds[curR-1].tot}); }
   persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide();
 }
 function progDelRound(id){ // 减少一轮
   const ps=PROG_PRESETS.find(p=>p.id===id);
-  if(ps){ const cur=progRoundCnt({id:id,defR:ps.defR,maxR:ps.maxR}); if(cur>1) state.progRounds[id]=cur-1; }
+  if(ps){ const cur=progRoundCnt({id:id,defR:(ps.defR===0?_knowDefR():ps.defR),maxR:ps.maxR}); if(cur>1) state.progRounds[id]=cur-1; }
   else { const it=state.progCustom.find(x=>x.id===id); if(it&&it.rounds.length>1) it.rounds.pop(); }
   persist(); renderProgress($('#main')); $('#side').innerHTML=renderSide();
 }
