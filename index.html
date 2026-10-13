@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="考研工作台">
 <meta name="theme-color" content="#ffd54f">
 <title>🫐 考研工作台</title>
-<!--APP_VER:2026.10.13.4-->
+<!--APP_VER:2026.10.13.5-->
 <style>
 :root{
   --paper:#FFF3D6;   /* 奶油黄 · 主背景 */
@@ -1581,6 +1581,33 @@ function monthSetLink(i,link){
     if(pv){ it.cur=pv.cur; if(pv.total) it.total=pv.total; if(!it.unit) it.unit=linkUnitGuess(link); } }
   else { delete it.link; }
   it._t=Date.now(); persist(); renderMonthList();
+}
+/* 旧关联 → 新格式(pg|条目id|轮次) 映射；返回 null 表示无法映射（死链，清理掉） */
+function _legacyLinkToPg(link){
+  const p=(link||'').split('|');
+  if(p[0]==='eng'){ const m={完形:'pe_完形',阅读:'pe_阅读',新题型:'pe_新题型',作文:'pe_作文'}; const id=m[p[1]]; if(!id) return null;
+    const r=p[2]==='y1'?0:p[2]==='y2'?1:p[2]==='y3'?2:-1; return r<0?null:'pg|'+id+'|'+r; }
+  if(p[0]==='vocab'){ const r=p[1]==='y1'?0:p[1]==='y2'?1:p[1]==='y3'?2:-1; return r<0?null:'pg|pv_word|'+r; }
+  if(p[0]==='pol'){ const m={q1000:'pp_1000',q1000y2:'pp_1000',q1000y3:'pp_1000',x8:'pp_x8',x4:'pp_x4'}; const id=m[p[1]]; if(!id) return null;
+    const r=(p[1]==='q1000y2')?1:(p[1]==='q1000y3')?2:0; return 'pg|'+id+'|'+r; }
+  if(p[0]==='know'){ const m={'发展心理学':'pk_发展心理学','心理学导论':'pk_心理学导论','心理与教育研究方法':'pk_研究方法'}; const id=m[p[1]]; if(!id) return null;
+    // 旧格式 know|科目|轮次（1-based），新格式固定读当前轮 → 统一映射到该条目的第0位
+    return 'pg|'+id+'|0'; }
+  return null;
+}
+/* 主迁移：把所有旧关联换成新格式；无法映射的死链直接解除关联（保留任务本身） */
+function migrateMonthPlanLinks(){
+  if(!Array.isArray(state.monthPlan)) return 0;
+  let n=0;
+  state.monthPlan.forEach(it=>{
+    if(!it.link || it.link.indexOf('pg|')===0) return;
+    const nl=_legacyLinkToPg(it.link);
+    if(nl){ it.link=nl; it._t=Date.now(); n++;
+      const pv=getProgressByLink(nl); if(pv){ it.cur=pv.cur; if(pv.total) it.total=pv.total; } }
+    else { delete it.link; it._t=Date.now(); n++; } // 死链 → 解除关联
+  });
+  if(n) persist();
+  return n;
 }
 function monthStep(i,d){
   if(!state.monthPlan) return;
@@ -6134,6 +6161,7 @@ async function cloudRestore(){
     merged.gh=ghCfg();
     merged._mtime=Date.now();
     state=merged; persist();
+    try{ migrateMonthPlanLinks(); }catch(_){}
     // 恢复后立即把合并结果推回云端，确保两端数据一致
     try{
       await fetch(SYNC_BASE + '/api/sync?code='+encodeURIComponent(s.code),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({state:merged})});
@@ -7606,6 +7634,7 @@ function boot(){
   try{ setupPWA(); }catch(e){ console.error('setupPWA',e); }
   try{ studyEnsureToday(); }catch(e){}
   try{ studyArchiveIfNewDay(); }catch(e){}
+  try{ migrateMonthPlanLinks(); }catch(e){ console.error('migrateLinks',e); }
   try{ pangpangPreloadAll(); }catch(e){}
   try{ $('#side').innerHTML=renderSide(); }catch(e){ console.error('renderSide ERR:', e.message, e.stack); }
   try{ showModule('home'); }catch(e){ console.error('showModule ERR:', e.message, e.stack); }
